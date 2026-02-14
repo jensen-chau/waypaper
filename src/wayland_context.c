@@ -6,6 +6,7 @@
 #include <wayland-client-core.h>
 #include <wayland-client.h>
 #include "wlr-layer-shell-unstable-v1-protocol.h"
+#include "xdg-shell-protocol.h"
 
 void on_global(void* data, struct wl_registry* registry, uint32_t name,
                const char* interface, uint32_t version) {
@@ -22,6 +23,12 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
         ctx->shell = wl_registry_bind(registry, name, &wl_shell_interface, version);
         if (!ctx->shell) {
             fprintf(stderr, "Failed to bind wl_shell\n");
+        }
+    } else if (strcmp(xdg_wm_base_interface.name, interface) == 0) {
+        printf("Binding xdg_wm_base...\n");
+        ctx->shell = wl_registry_bind(registry, name, &xdg_wm_base_interface, version);
+        if (!ctx->shell) {
+            fprintf(stderr, "Failed to bind xdg_wm_base\n");
         }
     } else if (strcmp(wl_shm_interface.name, interface) == 0) {
         printf("Binding wl_shm...\n");
