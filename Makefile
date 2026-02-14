@@ -6,13 +6,12 @@ SOURCES = src/main.c \
 		  src/wayland_context.c
 	
 LIBS = -lwayland-client
-CFLAGS = -O3 -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable $(INCLUDE)
 
 BUILD_DIR = build
 
 PROTOCOL_DIR = protocol
 SRC_PROTOCOL_DIR = src/protocol
-INCLUDE_PROTOCOL_DIR = include/protocol
+INCLUDE_PROTOCOL_DIR = include/protocol 
 
 WAYLAND_SCANNER = wayland-scanner 
 
@@ -23,6 +22,9 @@ PROTOCOL_SOURCES = $(addprefix $(SRC_PROTOCOL_DIR)/, $(notdir $(PROTOCOL_XMLS:.x
 OBJECTS = $(SOURCES:src/%.c=$(BUILD_DIR)/%.o)
 
 PROTOCOL_OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(PROTOCOL_SOURCES:.c=.o)))
+
+CFLAGS = -g -O0 -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable $(INCLUDE) -I$(INCLUDE_PROTOCOL_DIR)
+
 
 .PHONY: all clean run
 
@@ -36,7 +38,7 @@ $(SRC_PROTOCOL_DIR)/%-protocol.c: $(PROTOCOL_DIR)/%.xml | $(SRC_PROTOCOL_DIR)
 	$(WAYLAND_SCANNER) private-code $< $@
 
 $(BUILD_DIR)/%-protocol.o: $(SRC_PROTOCOL_DIR)/%-protocol.c
-	$(CC) $(FLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@mkdir -p $(BUILD_DIR)
