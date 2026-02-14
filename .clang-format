@@ -1,0 +1,63 @@
+# Google C++ Style Guide compatible .clang-format
+BasedOnStyle: Google
+
+# 语言设置
+Language: Cpp
+
+# 每行最大字符数（Google 默认是 80）
+ColumnLimit: 80
+
+# 缩进
+IndentWidth: 4
+UseTab: Never
+
+# 大括号风格：Google 使用 "Attach"（K&R 变体）
+BreakBeforeBraces: Attach
+
+# 函数声明和调用的参数对齐
+AlignAfterOpenBracket: Align
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: true
+
+# 指针和引用对齐：Google 倾向于左对齐（int* p），但官方风格实际是“随类型” → 放在类型后
+# Google 实际代码中多为 int* foo()，所以设为 Left（即 * 跟类型）
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# 空格
+SpacesBeforeTrailingComments: 2
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+# 括号、操作符周围空格
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+
+# Lambda 表达式
+LambdaBodyIndentation: Signature
+
+# 允许短函数/控制语句放在一行（如 if (x) return;）
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortCaseLabelsOnASingleLine: false
+
+# 排序 #include（可选，Google 不强制，但推荐分组）
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^<.*'
+    Priority: 2
+  - Regex: '.*'
+    Priority: 3
+
+# 注释
+CommentPragmas: '^ IWYU pragma:'
+
+# 其他
+DerivePointerAlignment: false
+SortIncludes: true
+FixNamespaceComments: true
