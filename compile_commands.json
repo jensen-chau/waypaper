@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "file": "src/main.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-O0",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-Wno-unused-variable",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-c",
+      "src/main.c",
+      "-o",
+      "build/main.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/way_ui",
+    "output": "build/main.o"
+  },
+  {
+    "file": "src/wayland_context.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-O0",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-Wno-unused-variable",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-c",
+      "src/wayland_context.c",
+      "-o",
+      "build/wayland_context.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/way_ui",
+    "output": "build/wayland_context.o"
+  }
+]

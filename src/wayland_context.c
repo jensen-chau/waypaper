@@ -5,6 +5,7 @@
 #include <string.h>
 #include <wayland-client-core.h>
 #include <wayland-client.h>
+#include "wlr-layer-shell-unstable-v1-protocol.h"
 
 void on_global(void* data, struct wl_registry* registry, uint32_t name,
                const char* interface, uint32_t version) {
@@ -39,6 +40,12 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
         ctx->compositor = wl_registry_bind(registry, name, &wl_compositor_interface, version);
         if (!ctx->compositor) {
             fprintf(stderr, "Failed to bind wl_compositor\n");
+        }
+    } else if (strcmp(zwlr_layer_shell_v1_interface.name, interface) == 0) {
+        printf("Binding zwlr_layer_shell_v1...\n");
+        ctx->layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, version);
+        if (!ctx->layer_shell) {
+            fprintf(stderr, "Failed to bind zwlr_layer_shell_v1\n");
         }
     }
 }

@@ -28,24 +28,22 @@ CFLAGS = -g -O0 -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable $(INCLU
 
 .PHONY: all clean run
 
-all: $(BUILD_DIR) $(INCLUDE_PROTOCOL_DIR) $(SRC_PROTOCOL_DIR) $(PROTOCOL_SOURCES) $(PROTOCOL_HEADERS) $(TARGET)
+all: $(BUILD_DIR)/$(TARGET)
 
+$(BUILD_DIR)/$(TARGET): $(OBJECTS) $(PROTOCOL_OBJECTS) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $(OBJECTS) $(PROTOCOL_OBJECTS) $(LIBS)
+
+$(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%-protocol.o: $(SRC_PROTOCOL_DIR)/%-protocol.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(INCLUDE_PROTOCOL_DIR)/%-protocol.h: $(PROTOCOL_DIR)/%.xml | $(INCLUDE_PROTOCOL_DIR)
 	$(WAYLAND_SCANNER) client-header $< $@
 
 $(SRC_PROTOCOL_DIR)/%-protocol.c: $(PROTOCOL_DIR)/%.xml | $(SRC_PROTOCOL_DIR)
 	$(WAYLAND_SCANNER) private-code $< $@
-
-$(BUILD_DIR)/%-protocol.o: $(SRC_PROTOCOL_DIR)/%-protocol.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(TARGET): $(OBJECTS)
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$(TARGET) $(OBJECTS) $(LIBS)
-
-$(BUILD_DIR)/%.o: src/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR):
 	@mkdir -p $@
