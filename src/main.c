@@ -9,7 +9,7 @@ int main() {
         fprintf(stderr, "Failed to initialize Wayland context\n");
         return 1;
     }
-    
+ 
     printf("Wayland context created successfully\n");
     return 0;
 }
