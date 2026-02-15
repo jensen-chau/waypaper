@@ -128,7 +128,7 @@ struct WaylandContext* wayland_context_init(int width, int height) {
 }
 
 void create_pool(struct WaylandContext* ctx) {
-    char tmp_name[] = "/tmp/wayland-shm-xxx";
+    char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
     int fd = mkstemp(tmp_name);
     if (fd < 0) {
         fprintf(stderr, "Failed to create temporary file\n");
@@ -139,12 +139,14 @@ void create_pool(struct WaylandContext* ctx) {
     int size = ctx->width * ctx->height * stride;
     if (ftruncate(fd, size) < 0) {
         fprintf(stderr, "Failed to truncate file\n");
+        close(fd);
         return;
     }
 
     ctx->shm_data = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (ctx->shm_data == MAP_FAILED) {
         fprintf(stderr, "Failed to mmap file\n");
+        close(fd);
         return;
     }
 
