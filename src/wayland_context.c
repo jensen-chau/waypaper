@@ -133,6 +133,8 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     fflush(stdout);
 
     ctx->display = display;
+    ctx->width = width;
+    ctx->height = height;
     ctx->registry = registry;
 
     create_pool(ctx);
@@ -166,7 +168,7 @@ void create_pool(struct WaylandContext* ctx) {
     
     ctx->pool = wl_shm_create_pool(ctx->shm, fd, size); 
     ctx->buffer = wl_shm_pool_create_buffer(ctx->pool, 0, ctx->width, ctx->height, stride, WL_SHM_FORMAT_XRGB8888);
-
-    wl_shm_pool_destroy(ctx->pool);
+    
+    close(fd);
 }
 
