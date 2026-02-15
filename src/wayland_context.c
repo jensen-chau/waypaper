@@ -172,3 +172,25 @@ void create_pool(struct WaylandContext* ctx) {
     close(fd);
 }
 
+void wayland_context_cleanup(struct WaylandContext *ctx) {
+    if (!ctx) return;
+    
+    if (ctx->display) {
+        wl_display_disconnect(ctx->display);
+    }
+    
+    if (ctx->pool) {
+        wl_shm_pool_destroy(ctx->pool);
+    }
+    
+    if (ctx->buffer) {
+        wl_buffer_destroy(ctx->buffer);
+    }
+    
+    if (ctx->shm_data) {
+        munmap(ctx->shm_data, ctx->width * ctx->height * 4);
+    }
+    
+    free(ctx);
+}
+
