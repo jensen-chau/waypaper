@@ -17,6 +17,7 @@ struct WaylandContext {
     struct wl_compositor *compositor;
     struct wl_seat *seat;
     struct zwlr_layer_shell_v1 *layer_shell;
+    struct zwlr_layer_surface_v1 *layer_surface;
 
     void* shm_data;
     int width;

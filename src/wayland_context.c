@@ -1,20 +1,22 @@
 #include "wayland_context.h"
 
+#include <fcntl.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "xdg-shell-protocol.h"
 
 void create_pool(struct WaylandContext* ctx);
+
+void create_surface(struct WaylandContext* ctx);
 
 void on_global(void* data, struct wl_registry* registry, uint32_t name,
                const char* interface, uint32_t version) {
@@ -24,16 +26,16 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
         return;
     }
 
-    //printf("name:%d,interface:%s,version:%d\n", name, interface, version);
+    // printf("name:%d,interface:%s,version:%d\n", name, interface, version);
 
     struct WaylandContext* ctx = (struct WaylandContext*)data;
 
-    if (strcmp(wl_shell_interface.name, interface) == 0) {
-        printf("Binding wl_shell...\n");
-        ctx->shell =
-            wl_registry_bind(registry, name, &wl_shell_interface, version);
-        if (!ctx->shell) {
-            fprintf(stderr, "Failed to bind wl_shell\n");
+    if (strcmp(interface, wl_compositor_interface.name) == 0) {
+        printf("Binding compositor\n");
+        ctx->compositor =
+            wl_registry_bind(registry, name, &wl_compositor_interface, version);
+        if (!ctx->compositor) {
+            fprintf(stderr, "Failed to bind compositor\n");
         }
     } else if (strcmp(xdg_wm_base_interface.name, interface) == 0) {
         printf("Binding xdg_wm_base...\n");
@@ -48,13 +50,6 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
         if (!ctx->shm) {
             fprintf(stderr, "Failed to bind wl_shm\n");
         }
-    } else if (strcmp(wl_surface_interface.name, interface) == 0) {
-        printf("Binding wl_surface...\n");
-        ctx->surface =
-            wl_registry_bind(registry, name, &wl_surface_interface, version);
-        if (!ctx->surface) {
-            fprintf(stderr, "Failed to bind wl_surface\n");
-        }
     } else if (strcmp(wl_compositor_interface.name, interface) == 0) {
         printf("Binding wl_compositor...\n");
         ctx->compositor =
@@ -68,18 +63,6 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
             registry, name, &zwlr_layer_shell_v1_interface, version);
         if (!ctx->layer_shell) {
             fprintf(stderr, "Failed to bind zwlr_layer_shell_v1\n");
-        }
-    } else if (strcmp(wl_shm_pool_interface.name, interface) == 0) {
-        printf("Binding wl_shm_pool...\n");
-        ctx->pool = wl_registry_bind(registry, name, &wl_shm_pool_interface, version);
-        if (!ctx->pool) {
-            fprintf(stderr, "Failed to bind wl_shm_pool\n");
-        }
-    } else if (strcmp(wl_buffer_interface.name, interface) == 0) {
-        printf("Binding wl_buffer...\n");
-        ctx->buffer = wl_registry_bind(registry, name, &wl_buffer_interface, version);
-        if (!ctx->buffer) {
-            fprintf(stderr, "Failed to bind wl_buffer\n");
         }
     }
 }
@@ -138,12 +121,11 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     ctx->registry = registry;
 
     create_pool(ctx);
-    
+    create_surface(ctx);
 
     printf("Wayland context initialized successfully\n");
     return ctx;
 }
-
 
 void create_pool(struct WaylandContext* ctx) {
     char tmp_name[] = "/tmp/wayland-shm-xxx";
@@ -165,32 +147,46 @@ void create_pool(struct WaylandContext* ctx) {
         fprintf(stderr, "Failed to mmap file\n");
         return;
     }
-    
-    ctx->pool = wl_shm_create_pool(ctx->shm, fd, size); 
-    ctx->buffer = wl_shm_pool_create_buffer(ctx->pool, 0, ctx->width, ctx->height, stride, WL_SHM_FORMAT_XRGB8888);
-    
+
+    ctx->pool = wl_shm_create_pool(ctx->shm, fd, size);
+    ctx->buffer = wl_shm_pool_create_buffer(
+        ctx->pool, 0, ctx->width, ctx->height, stride, WL_SHM_FORMAT_XRGB8888);
+
     close(fd);
 }
 
-void wayland_context_cleanup(struct WaylandContext *ctx) {
+void wayland_context_cleanup(struct WaylandContext* ctx) {
     if (!ctx) return;
-    
+
     if (ctx->display) {
         wl_display_disconnect(ctx->display);
     }
-    
+
     if (ctx->pool) {
         wl_shm_pool_destroy(ctx->pool);
     }
-    
+
     if (ctx->buffer) {
         wl_buffer_destroy(ctx->buffer);
     }
-    
+
     if (ctx->shm_data) {
         munmap(ctx->shm_data, ctx->width * ctx->height * 4);
     }
-    
+
     free(ctx);
 }
 
+void create_surface(struct WaylandContext* ctx) {
+    ctx->surface = wl_compositor_create_surface(ctx->compositor);
+    ctx->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+        ctx->layer_shell, ctx->surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY,
+        "game");
+
+    zwlr_layer_surface_v1_set_size(ctx->layer_surface, ctx->width, ctx->height);
+    zwlr_layer_surface_v1_set_anchor(
+        ctx->layer_surface,
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
+    zwlr_layer_surface_v1_set_exclusive_zone(ctx->layer_surface, -1);
+    wl_surface_commit(ctx->surface);
+}
