@@ -5,6 +5,8 @@
 
 #include "wayland_context.h"
 
+struct Node;
+
 static int should_exit = 0;
 static struct Context* ctx;
 

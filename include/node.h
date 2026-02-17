@@ -2,9 +2,12 @@
 #define NODE_H
 
 #include <wayland-client-protocol.h>
-#include "context.h"
 #include "event.h"
 #include <stdlib.h>
+
+struct Context;
+
+void draw_point(int x, int y, unsigned int color);
 
 #define container_of(ptr, type, member) \
     ((type*)((char*)(ptr) - offsetof(type, member)))
@@ -52,29 +55,18 @@ struct Node {
     AddChild add_child;
 };
 
-void node_init(struct Node* self, int x, int y, int width, int height, NodeType node_type) {
-    self->x = x;
-    self->y = y;
-    self->width = width;
-    self->height = height;
-    self->node_type = node_type;
-}
-
-void node_draw(struct Node* self) {
-    for(int i=0; i<self->width; i++) {
-        for (int j=0; j<self->height; i++) {
-            draw_point(self->x + i, self->y + j, 0xAAFF3200);
-        }
-    }
-}
-
-void add_child(struct Node* self, struct Node* child) {
-    da_append(self->children, child);
-}
+extern void node_init(struct Node* self, int x, int y, int width, int height, NodeType node_type);
 
 
-void set_bg_color(struct Node* self, uint32_t color) {
-    self->bg_color = color;
-}
+
+extern void node_draw(struct Node* self);
+
+
+
+extern void add_child(struct Node* self, struct Node* child);
+
+
+
+extern void set_bg_color(struct Node* self, uint32_t color);
 
 #endif

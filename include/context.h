@@ -2,9 +2,9 @@
 #define CONTEXT_H
 
 #include <stdint.h>
-#include "wayland_context.h"
+#include "node.h"
 
-struct Node;
+struct WaylandContext;
 
 typedef struct {
     float x;
