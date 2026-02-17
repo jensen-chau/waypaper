@@ -32,9 +32,9 @@ struct VectorNode {
 
 typedef void (*NodeDraw)(struct Node* self);
 
-typedef void (*HandleEvent)(struct Node* self, EVENT event);
+typedef void (*HandleEvent)(struct Node* self, Event event);
 
-typedef int (*AddChild)(struct Node* self, struct Node child);
+typedef void (*AddChild)(struct Node* self, struct Node* child);
 
 typedef enum NodeType {
     Node,

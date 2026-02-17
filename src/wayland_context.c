@@ -200,7 +200,7 @@ void create_pool(struct WaylandContext* ctx) {
     }
 
     int stride = 4 * ctx->width;
-    int size = ctx->width * ctx->height * stride;
+    int size = ctx->width * ctx->height * 4; // 每像素4字节 (XRGB8888)
     if (ftruncate(fd, size) < 0) {
         fprintf(stderr, "Failed to truncate file\n");
         close(fd);

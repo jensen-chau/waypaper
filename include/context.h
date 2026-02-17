@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "node.h"
+#include "event.h"
 
 struct WaylandContext;
 
@@ -25,5 +26,6 @@ void run(struct Node* root);
 
 void draw_point(int x, int y, uint32_t color);
 
+void handle_event(PointEvent point_event, void* data);
 
 #endif

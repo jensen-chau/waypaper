@@ -3,30 +3,25 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <wayland-client.h>
-
-int is_enter = 0;
+#include "context.h"
 
 static void pointer_handle_enter(void* data, struct wl_pointer* pointer,
                                  uint32_t serial, struct wl_surface* surface,
                                  wl_fixed_t surface_x, wl_fixed_t surface_y) {
-    is_enter = 1;
     printf("pointer enter\n");
 }
 
 static void pointer_handle_leave(void* data, struct wl_pointer* pointer,
                                  uint32_t serial, struct wl_surface* surface) {
-    is_enter = 0;
     printf("pointer leave\n");
 }
 
 static void pointer_handle_motion(void* data, struct wl_pointer* pointer,
                                   uint32_t time, wl_fixed_t surface_x,
                                   wl_fixed_t surface_y) {
-    if (!is_enter) {
-        return;
-    }
     printf("pointer motion,x:%.2f,y:%.2f\n", 
            wl_fixed_to_double(surface_x), wl_fixed_to_double(surface_y));
+    handle_event(MOTION, 0);
 }
 
 static void pointer_handle_button(void* data, struct wl_pointer* pointer,
@@ -34,6 +29,7 @@ static void pointer_handle_button(void* data, struct wl_pointer* pointer,
                                   uint32_t button, uint32_t state) {
     printf("pointer button,serial:%u,time:%u,button:%u,state:%s\n", 
            serial, time, button, state == WL_POINTER_BUTTON_STATE_PRESSED ? "PRESSED" : "RELEASED");
+    handle_event(MOUSE_CLICK, 0);
 }
 
 static void pointer_handle_axis(void* data, struct wl_pointer* pointer,
