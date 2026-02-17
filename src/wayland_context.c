@@ -15,7 +15,7 @@
 
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "xdg-shell-protocol.h"
-#include "wl_point_handle.h"
+#include "wl_pointer_handle.h"
 #include "wl_keyboard_handle.h"
 
 void create_pool(struct WaylandContext* ctx);
@@ -173,28 +173,18 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     }
 
     ctx->pointer = wl_seat_get_pointer(ctx->seat);
-    //wl_pointer_add_listener(ctx->pointer, &pointer_listener, ctx);
+    wl_pointer_add_listener(ctx->pointer, &pointer_listener, ctx);
 
     // 再次确保事件处理完成
     wl_display_roundtrip(display);
-
-    ctx->keyboard = wl_seat_get_keyboard(ctx->seat);
-    printf("Keyboard pointer: %p\n", (void*)ctx->keyboard);
-    if (ctx->keyboard) {
-        wl_keyboard_add_listener(ctx->keyboard, &keyboard_listener, ctx);
-        printf("Keyboard listener added successfully\n");
-        
-        // 测试：触发一个键盘事件来验证 listener 是否工作
-        printf("Testing keyboard listener...\n");
-        wl_display_roundtrip(display);
-    } else {
-        printf("Warning: Failed to get keyboard from seat\n");
-    }
 
     printf("Creating pool...\n");
     create_pool(ctx);
     printf("Creating surface...\n");
     create_surface(ctx);
+
+    ctx->keyboard = wl_seat_get_keyboard(ctx->seat);
+    wl_keyboard_add_listener(ctx->keyboard, &keyboard_listener, ctx);
 
     printf("Wayland context initialized successfully\n");
     return ctx;
@@ -301,6 +291,7 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
 void create_surface(struct WaylandContext* ctx) {
     printf("Creating surface...\n");
     ctx->surface = wl_compositor_create_surface(ctx->compositor);
+    printf("Surface pointer: %p\n", (void*)ctx->surface);
     if (!ctx->surface) {
         fprintf(stderr, "Failed to create surface\n");
         return;
@@ -309,6 +300,7 @@ void create_surface(struct WaylandContext* ctx) {
     ctx->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
         ctx->layer_shell, ctx->surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY,
         "game");
+    printf("Layer surface pointer: %p\n", (void*)ctx->layer_surface);
     if (!ctx->layer_surface) {
         fprintf(stderr, "Failed to get layer surface\n");
         return;
@@ -317,14 +309,16 @@ void create_surface(struct WaylandContext* ctx) {
     zwlr_layer_surface_v1_set_size(ctx->layer_surface, ctx->width, ctx->height);
     zwlr_layer_surface_v1_set_anchor(
         ctx->layer_surface,
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
     zwlr_layer_surface_v1_set_exclusive_zone(ctx->layer_surface, -1);
+    zwlr_layer_surface_v1_set_keyboard_interactivity(ctx->layer_surface, 1);
 
     // 注册层表面监听器
     zwlr_layer_surface_v1_add_listener(ctx->layer_surface,
                                        &layer_surface_listener, ctx);
 
     wl_surface_commit(ctx->surface);
+    printf("Surface committed\n");
     wl_display_roundtrip(ctx->display);
 
     // 等待层表面配置

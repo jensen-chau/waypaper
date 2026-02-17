@@ -14,8 +14,18 @@ void keymap_handler(void* data, struct wl_keyboard* keyboard, uint32_t format,
     printf("keymap_handler\n");
     
     struct WaylandContext *ctx = (struct WaylandContext *)data;
-    ClientState *state = (struct ClientState *)malloc(sizeof(ClientState));
-    ctx->client_state = state;
+    if (ctx->client_state) {
+        // 如果已经存在，重置现有结构体
+        ClientState *state = ctx->client_state;
+        if (state->context) xkb_context_unref(state->context);
+        if (state->keymap) xkb_keymap_unref(state->keymap);
+        if (state->xkb_state) xkb_state_unref(state->xkb_state);
+    } else {
+        // 如果不存在，分配新的结构体
+        ClientState *state = (struct ClientState *)malloc(sizeof(ClientState));
+        ctx->client_state = state;
+    }
+    ClientState *state = ctx->client_state;
 
     if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
         close(fd);

@@ -16,7 +16,8 @@ PROTOCOL_HEADERS = $(addprefix $(INCLUDE_PROTOCOL_DIR)/, $(notdir $(PROTOCOL_XML
 PROTOCOL_SOURCES = $(addprefix $(SRC_PROTOCOL_DIR)/, $(notdir $(PROTOCOL_XMLS:.xml=-protocol.c)))
 
 SOURCES = src/main.c \
-          src/wayland_context.c
+          src/wayland_context.c \
+		  src/context.c
 
 OBJECTS = $(SOURCES:src/%.c=$(BUILD_DIR)/%.o)
 PROTOCOL_OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(PROTOCOL_SOURCES:.c=.o)))
