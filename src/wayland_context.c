@@ -12,6 +12,8 @@
 #include <wayland-client-core.h>
 #include <wayland-client.h>
 #include <wayland-util.h>
+#include <cairo.h>
+#include <cairo-xlib.h>
 
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "xdg-shell-protocol.h"
@@ -234,12 +236,42 @@ void create_pool(struct WaylandContext* ctx) {
 
     unlink(tmp_name);
     printf("Pool created successfully\n");
+    
+    // 创建Cairo surface和context
+    printf("Creating Cairo surface and context...\n");
+    ctx->cairo_surface = cairo_image_surface_create_for_data(
+        (unsigned char*)ctx->shm_data, 
+        CAIRO_FORMAT_ARGB32, 
+        ctx->width, 
+        ctx->height, 
+        stride);
+    if (!ctx->cairo_surface) {
+        fprintf(stderr, "Failed to create Cairo surface\n");
+        return;
+    }
+    
+    ctx->cairo_context = cairo_create(ctx->cairo_surface);
+    if (!ctx->cairo_context) {
+        fprintf(stderr, "Failed to create Cairo context\n");
+        cairo_surface_destroy(ctx->cairo_surface);
+        return;
+    }
+    
+    printf("Cairo surface and context created successfully\n");
 }
 
 void wayland_context_cleanup(struct WaylandContext* ctx) {
     if (!ctx) return;
 
     printf("Cleaning up Wayland context...\n");
+
+    // 清理Cairo资源
+    if (ctx->cairo_context) {
+        cairo_destroy(ctx->cairo_context);
+    }
+    if (ctx->cairo_surface) {
+        cairo_surface_destroy(ctx->cairo_surface);
+    }
 
     if (ctx->layer_surface) {
         zwlr_layer_surface_v1_destroy(ctx->layer_surface);

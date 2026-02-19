@@ -23,17 +23,28 @@ void node_draw(struct Node* self) {
         return;
     }
     
-    // 使用硬编码的边界检查，因为无法直接访问全局ctx
-    for(int i=0; i<self->width && i<200; i++) {
-        for (int j=0; j<self->height && j<200; j++) {
+    // 检查节点是否在视口内
+    if (self->x >= 200 || self->y >= 200 || 
+        self->x + self->width <= 0 || self->y + self->height <= 0) {
+        return;
+    }
+    
+    // 绘制节点背景
+    for (int i = 0; i < self->width; i++) {
+        for (int j = 0; j < self->height; j++) {
             int px = self->x + i;
             int py = self->y + j;
             
-            // 简单的边界检查
+            // 边界检查
             if (px >= 0 && px < 200 && py >= 0 && py < 200) {
-                draw_point(px, py, 0xAAFF3200);
+                draw_point(px, py, self->bg_color);
             }
         }
+    }
+
+    // 绘制子节点
+    for (int i = 0; i < self->children.count; i++) {
+        self->children.items[i]->node_draw(self->children.items[i]);
     }
 }
 

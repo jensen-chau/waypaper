@@ -18,6 +18,7 @@ struct Context {
     Point mouse_pos;
     struct WaylandContext* wayland_context;
     HashMap node_map;
+    struct Node* root_node;
 };
 
 struct Context* get_context(int width, int height);
@@ -35,5 +36,9 @@ void add_node(struct Node* node);
 Point get_mouse_point_pos();
 
 struct Node* get_node(const char* id);
+
+// 前向声明
+struct Button;
+void button_handle_click(struct Button* button);
 
 #endif

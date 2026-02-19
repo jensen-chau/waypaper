@@ -20,6 +20,7 @@ SOURCES = src/main.c \
 		  src/context.c \
 		  src/node.c \
 		  src/box.c \
+		  src/button.c \
 		  src/utils.c
 
 OBJECTS = $(SOURCES:src/%.c=$(BUILD_DIR)/%.o)
@@ -30,7 +31,10 @@ MATH_LIBS = -lm
 XBKB_LIBS = -lxkbcommon
 LDFLAGS = $(WAYLAND_LIBS) $(MATH_LIBS) $(XBKB_LIBS)
 
-CFLAGS = -g -Wall $(INCLUDES) -I$(INCLUDE_PROTOCOL_DIR)
+CFLAGS = -g -Wall $(INCLUDES) -I$(INCLUDE_PROTOCOL_DIR) $(shell pkg-config --cflags cairo pango pangocairo)
+LIBS = $(shell pkg-config --libs cairo pango pangocairo)
+
+CFLAGS += $(LIBS)
 
 .PHONY: all clean run
 

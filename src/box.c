@@ -22,13 +22,26 @@ struct Box* box_new(const char* id, Layout layout, int x, int y, int width, int 
 }
 
 void draw_box(struct Node* self) {
+    // 检查节点是否在视口内
+    if (self->x >= 200 || self->y >= 200 || 
+        self->x + self->width <= 0 || self->y + self->height <= 0) {
+        return;
+    }
+    
+    // 绘制节点背景
     for (int i = 0; i < self->width; i++) {
         for (int j = 0; j < self->height; j++) {
-            draw_point(self->x + i, self->y + j, self->bg_color);
+            int px = self->x + i;
+            int py = self->y + j;
+            
+            // 边界检查
+            if (px >= 0 && px < 200 && py >= 0 && py < 200) {
+                draw_point(px, py, self->bg_color);
+            }
         }
     }
 
-
+    // 绘制子节点
     for (int i = 0; i < self->children.count; i++) {
         self->children.items[i]->node_draw(self->children.items[i]);
     }

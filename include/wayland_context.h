@@ -41,6 +41,10 @@ struct WaylandContext {
     int width;
     int height;
     int configured;
+    
+    // Cairo rendering support
+    void* cairo_surface;
+    void* cairo_context;
 };
 
 struct WaylandContext *wayland_context_init(int width, int height);

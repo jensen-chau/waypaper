@@ -6,6 +6,7 @@
 #include "box.h"
 #include "context.h"
 #include "node.h"
+#include "button.h"
 #include "wayland_context.h"
 
 
@@ -22,6 +23,14 @@ void key_handler(void* data, struct wl_keyboard* keyboard, uint32_t serial,
             app_exit();
         }
     }
+}
+
+// 按钮点击事件处理函数示例
+void on_button_click(struct Button* button) {
+    printf("Button '%s' clicked!\n", button->text);
+    // 这里可以添加按钮点击后的处理逻辑
+    struct Button* btn = (struct Button*)get_node("button1");
+    button_set_text(btn, "hello world");
 }
 
 int main() {
@@ -58,6 +67,15 @@ int main() {
     set_bg_color(&child2->node, 0x0000FFFF);
     add_child(&child1->node, &child2->node);
 
+    
+    // 创建按钮
+    struct Button* button = button_new("button1", 50, 50, 100, 40, "Click Me");
+    if (button) {
+        set_bg_color(&button->node, 0xFF6666FF);
+        // 设置点击事件处理函数
+        button_set_on_click(button, on_button_click, NULL);
+        add_child(&box->node, &button->node);
+    }
 
     printf("Starting main loop...\n");
     run(&box->node);
