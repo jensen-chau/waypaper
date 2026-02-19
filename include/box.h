@@ -6,7 +6,9 @@
 
 typedef enum Layout {
     Vertical,
-    Horizontal
+    Horizontal,
+    Grid, // 网格布局
+    Stack  // 堆叠布局（所有子节点重叠）
 } Layout;
 
 

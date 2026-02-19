@@ -21,6 +21,10 @@ SOURCES = src/main.c \
 		  src/node.c \
 		  src/box.c \
 		  src/button.c \
+		  src/label.c \
+		  src/text_input.c \
+		  src/checkbox.c \
+		  src/slider.c \
 		  src/utils.c
 
 OBJECTS = $(SOURCES:src/%.c=$(BUILD_DIR)/%.o)
