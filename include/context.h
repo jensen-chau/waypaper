@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "node.h"
 #include "event.h"
+#include "utils.h"
 
 struct WaylandContext;
 
@@ -16,6 +17,7 @@ typedef struct {
 struct Context {
     Point mouse_pos;
     struct WaylandContext* wayland_context;
+    HashMap node_map;
 };
 
 struct Context* get_context(int width, int height);
@@ -28,4 +30,7 @@ void draw_point(int x, int y, uint32_t color);
 
 void handle_event(PointEvent point_event, void* data);
 
+void add_node(struct Node* node);
+
+struct Node* get_node(const char* id);
 #endif

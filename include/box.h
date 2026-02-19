@@ -16,7 +16,7 @@ struct Box {
     struct VectorNode children;
 };
 
-extern struct Box* box_new(Layout layout, int x, int y, int width, int height);
+extern struct Box* box_new(const char* id, Layout layout, int x, int y, int width, int height);
 
 extern void draw_box(struct Node* self);
 

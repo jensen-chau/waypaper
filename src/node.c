@@ -1,7 +1,9 @@
 #include "node.h"
 #include <stdio.h>
+#include "context.h"
 
-void node_init(struct Node* self, int x, int y, int width, int height, NodeType node_type) {
+void node_init(struct Node* self, const char* id, int x, int y, int width, int height, NodeType node_type) {
+    self->id = id;
     self->x = x;
     self->y = y;
     self->width = width;
@@ -12,6 +14,8 @@ void node_init(struct Node* self, int x, int y, int width, int height, NodeType 
     self->children.count = 0;
     self->children.capacity = 0;
     self->children.items = NULL;
+
+    add_node(self);
 }
 
 void node_draw(struct Node* self) {

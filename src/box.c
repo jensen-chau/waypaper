@@ -1,7 +1,7 @@
 #include "box.h"
 #include <stdio.h>
 
-struct Box* box_new(Layout layout, int x, int y, int width, int height) {
+struct Box* box_new(const char* id, Layout layout, int x, int y, int width, int height) {
     struct Box* box = (struct Box*)malloc(sizeof(struct Box));
     if (!box) {
         fprintf(stderr, "Failed to allocate box\n");
@@ -13,7 +13,7 @@ struct Box* box_new(Layout layout, int x, int y, int width, int height) {
     box->children.items = NULL;
     
     // 初始化node
-    node_init(&box->node, x, y, width, height, Box);
+    node_init(&box->node, id, x, y, width, height, Box);
     box->layout = layout;
     
     box->node.node_draw = draw_box;

@@ -41,7 +41,7 @@ int main() {
 
     printf("Wayland context created successfully\n");
 
-    struct Box* box = box_new(Vertical, 0, 0, 200, 200);
+    struct Box* box = box_new("box1", Vertical, 0, 0, 200, 200);
     if (!box) {
         fprintf(stderr, "Failed to create box\n");
         return 1;
@@ -49,12 +49,12 @@ int main() {
 
     set_bg_color(&box->node, 0xFF0000FF);
 
-    struct Box* child1 = box_new(Vertical, 0, 0, 100, 100);
+    struct Box* child1 = box_new("box2", Vertical, 0, 0, 100, 100);
 
     set_bg_color(&child1->node, 0x00FF00FF);
     add_child(&box->node, &child1->node);
 
-    struct Box* child2 = box_new(Vertical, 0, 0, 50, 50);
+    struct Box* child2 = box_new("box3", Vertical, 0, 0, 50, 50);
     set_bg_color(&child2->node, 0x0000FFFF);
     add_child(&child1->node, &child2->node);
 

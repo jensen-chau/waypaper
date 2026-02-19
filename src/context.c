@@ -1,9 +1,11 @@
 #include "context.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "utils.h"
 #include "wayland_context.h"
 
 struct Node;
@@ -27,6 +29,7 @@ struct Context* get_context(int width, int height) {
         ctx = NULL;
         return NULL;
     }
+    ctx->node_map = (HashMap){0};
     return ctx;
 }
 
@@ -78,6 +81,29 @@ void run(struct Node* root) {
     wayland_context_cleanup(wayland_ctx);
     free(ctx);
     ctx = NULL;
+}
+
+void add_node(struct Node* node) {
+    if (!ctx) {
+        fprintf(stderr, "Error: context is NULL\n");
+        return;
+    }
+    
+    uint32_t key = str_to_num(node->id);
+
+    hash_map_put(&ctx->node_map, key, node);
+
+}
+
+struct Node* get_node(const char* id) {
+    if (!ctx) {
+        fprintf(stderr, "Error: context is NULL\n");
+        return NULL;
+    }
+    
+    uint32_t key = str_to_num(id);
+
+    return  (struct Node*)hash_map_get(&ctx->node_map, key);
 }
 
 void draw_point(int x, int y, uint32_t color) {

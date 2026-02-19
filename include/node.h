@@ -42,7 +42,9 @@ typedef enum NodeType {
     Button,
 }NodeType;
 
+
 struct Node {
+    const char* id;
     int x;
     int y;
     int width;
@@ -55,18 +57,13 @@ struct Node {
     AddChild add_child;
 };
 
-extern void node_init(struct Node* self, int x, int y, int width, int height, NodeType node_type);
-
-
+extern void node_init(struct Node* self, const char* id, int x, int y, int width, int height, NodeType node_type);
 
 extern void node_draw(struct Node* self);
 
-
-
 extern void add_child(struct Node* self, struct Node* child);
 
-
-
 extern void set_bg_color(struct Node* self, uint32_t color);
+
 
 #endif
