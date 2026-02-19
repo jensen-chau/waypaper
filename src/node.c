@@ -51,3 +51,18 @@ void set_bg_color(struct Node* self, uint32_t color) {
     }
     self->bg_color = color;
 }
+
+int is_hoverd(struct Node* self) {
+    Point point_pos = get_mouse_point_pos();
+
+    if(self->x > point_pos.x || self->x + self->width > point_pos.x) {
+        return 0;
+    }
+
+    if (self->y > point_pos.y || self->y + self->height > point_pos.y) {
+        return 0;
+    }
+
+    return 1;
+}
+

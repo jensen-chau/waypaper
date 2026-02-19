@@ -36,6 +36,8 @@ typedef void (*HandleEvent)(struct Node* self, Event event);
 
 typedef void (*AddChild)(struct Node* self, struct Node* child);
 
+typedef int (*IsHoverd)(struct Node* self);
+
 typedef enum NodeType {
     Node,
     Box,
@@ -55,6 +57,7 @@ struct Node {
     NodeDraw node_draw;
     HandleEvent handle_event;
     AddChild add_child;
+    IsHoverd is_hoverd;
 };
 
 extern void node_init(struct Node* self, const char* id, int x, int y, int width, int height, NodeType node_type);

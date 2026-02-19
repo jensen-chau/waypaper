@@ -123,4 +123,12 @@ void draw_point(int x, int y, uint32_t color) {
 
 void handle_event(PointEvent point_event, void *data) {
     printf("point_event:%d\n", point_event);
+    if (point_event == MOTION) {
+        ctx->mouse_pos.x = ((Point*)data)->x;
+        ctx->mouse_pos.y = ((Point*)data)->y;
+    }
+}
+
+Point get_mouse_point_pos() {
+    return ctx->mouse_pos;
 }

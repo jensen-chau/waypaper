@@ -9,8 +9,8 @@
 struct WaylandContext;
 
 typedef struct {
-    float x;
-    float y;
+    double x;
+    double y;
 } Point;
 
 
@@ -32,5 +32,8 @@ void handle_event(PointEvent point_event, void* data);
 
 void add_node(struct Node* node);
 
+Point get_mouse_point_pos();
+
 struct Node* get_node(const char* id);
+
 #endif

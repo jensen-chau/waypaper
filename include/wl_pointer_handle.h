@@ -2,6 +2,7 @@
 #define WL_POINTER_HANDLE_H
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <wayland-client.h>
 #include "context.h"
 
@@ -21,7 +22,10 @@ static void pointer_handle_motion(void* data, struct wl_pointer* pointer,
                                   wl_fixed_t surface_y) {
     printf("pointer motion,x:%.2f,y:%.2f\n", 
            wl_fixed_to_double(surface_x), wl_fixed_to_double(surface_y));
-    handle_event(MOTION, 0);
+    Point* p = (Point*)malloc(sizeof(Point));
+    *p = (Point){wl_fixed_to_double(surface_x), wl_fixed_to_double(surface_y)};
+    handle_event(MOTION, p);
+    free(p);
 }
 
 static void pointer_handle_button(void* data, struct wl_pointer* pointer,

@@ -58,6 +58,7 @@ int main() {
     set_bg_color(&child2->node, 0x0000FFFF);
     add_child(&child1->node, &child2->node);
 
+
     printf("Starting main loop...\n");
     run(&box->node);
 
