@@ -1,5 +1,39 @@
 [
   {
+    "file": "src/main.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-Wall",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-DSTB_IMAGE_RESIZE_IMPLEMENTATION",
+      "-c",
+      "src/main.c",
+      "-o",
+      "build/main.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/waypaper",
+    "output": "build/main.o"
+  },
+  {
+    "file": "src/wayland_context.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-Wall",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-DSTB_IMAGE_RESIZE_IMPLEMENTATION",
+      "-c",
+      "src/wayland_context.c",
+      "-o",
+      "build/wayland_context.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/waypaper",
+    "output": "build/wayland_context.o"
+  },
+  {
     "file": "src/context.c",
     "arguments": [
       "gcc",
@@ -7,19 +41,7 @@
       "-Wall",
       "-Iinclude",
       "-Iinclude/protocol",
-      "-I/usr/include/pango-1.0",
-      "-I/usr/include/cairo",
-      "-I/usr/include/pixman-1",
-      "-I/usr/include/libmount",
-      "-I/usr/include/blkid",
-      "-I/usr/include/fribidi",
-      "-I/usr/include/harfbuzz",
-      "-I/usr/include/freetype2",
-      "-I/usr/include/libpng16",
-      "-I/usr/include/glib-2.0",
-      "-I/usr/lib/glib-2.0/include",
-      "-I/usr/include/sysprof-6",
-      "-pthread",
+      "-DSTB_IMAGE_RESIZE_IMPLEMENTATION",
       "-c",
       "src/context.c",
       "-o",
@@ -27,5 +49,73 @@
     ],
     "directory": "/mnt/newdisk/Project/C-project/waypaper",
     "output": "build/context.o"
+  },
+  {
+    "file": "src/utils.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-Wall",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-DSTB_IMAGE_RESIZE_IMPLEMENTATION",
+      "-c",
+      "src/utils.c",
+      "-o",
+      "build/utils.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/waypaper",
+    "output": "build/utils.o"
+  },
+  {
+    "file": "src/protocol/viewporter-protocol.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-Wall",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-DSTB_IMAGE_RESIZE_IMPLEMENTATION",
+      "-c",
+      "src/protocol/viewporter-protocol.c",
+      "-o",
+      "build/viewporter-protocol.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/waypaper",
+    "output": "build/viewporter-protocol.o"
+  },
+  {
+    "file": "src/protocol/wlr-layer-shell-unstable-v1-protocol.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-Wall",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-DSTB_IMAGE_RESIZE_IMPLEMENTATION",
+      "-c",
+      "src/protocol/wlr-layer-shell-unstable-v1-protocol.c",
+      "-o",
+      "build/wlr-layer-shell-unstable-v1-protocol.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/waypaper",
+    "output": "build/wlr-layer-shell-unstable-v1-protocol.o"
+  },
+  {
+    "file": "src/protocol/xdg-shell-protocol.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-Wall",
+      "-Iinclude",
+      "-Iinclude/protocol",
+      "-DSTB_IMAGE_RESIZE_IMPLEMENTATION",
+      "-c",
+      "src/protocol/xdg-shell-protocol.c",
+      "-o",
+      "build/xdg-shell-protocol.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/waypaper",
+    "output": "build/xdg-shell-protocol.o"
   }
 ]

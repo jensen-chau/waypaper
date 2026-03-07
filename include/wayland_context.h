@@ -3,6 +3,8 @@
 
 #include <wayland-client-protocol.h>
 #include <wayland-client.h>
+#include "linux-dmabuf-v1-protocol.h"
+#include "viewporter-protocol.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 
 #define MAX_OUTPUTS 10
@@ -38,6 +40,8 @@ struct WaylandContext {
     struct wl_pointer *pointer;
     struct wl_keyboard *keyboard;
     struct zwlr_layer_shell_v1 *layer_shell;
+    struct wp_viewporter *viewporter;
+    struct zwp_linux_dmabuf_v1 *dmabuf;
     struct ClientState *client_state;
 
     OutputInfo outputs[MAX_OUTPUTS];

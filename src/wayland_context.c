@@ -13,9 +13,11 @@
 #include <wayland-client.h>
 #include <wayland-util.h>
 
+#include "linux-dmabuf-v1-protocol.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "xdg-shell-protocol.h"
 #include "wl_pointer_handle.h"
+#include "viewporter-protocol.h"
 
 static void output_geometry(void *data, struct wl_output *wl_output,
                            int32_t x, int32_t y, int32_t physical_width, int32_t physical_height,
@@ -105,6 +107,9 @@ void create_surface_for_output(struct WaylandContext* ctx, int output_idx, int32
                                        &layer_surface_listener, output_info);
 
     wl_surface_commit(output_info->surface);
+
+    struct wp_viewport *viewport = wp_viewporter_get_viewport(ctx->viewporter, output_info->surface);
+
     
     // 等待层表面配置
     while (!output_info->configured) {
@@ -150,6 +155,10 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
             
             ctx->num_outputs++;
         }
+    } else if (strcmp(wp_viewporter_interface.name, interface) == 0) {
+        ctx->viewporter = wl_registry_bind(registry, name, &wp_viewporter_interface, version);
+    } else if (strcmp(zwp_linux_dmabuf_v1_interface.name, interface) == 0) {
+        ctx->dmabuf = wl_registry_bind(registry, name, &zwp_linux_dmabuf_v1_interface, version);
     }
 }
 

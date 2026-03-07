@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #include "stb_image.h"
-#include "stb_image_resize2.h"
+#include "scale.h"
 #include "wayland_context.h"
 
 struct Node;
@@ -53,14 +53,6 @@ void load_wallpaper(const char* path) {
 
     struct WaylandContext* wayland_ctx = ctx->wayland_context;
     
-    // 预先计算最大的输出尺寸以减少重复的缩放计算
-    int max_width = 0, max_height = 0;
-    for (int i = 0; i < wayland_ctx->num_outputs; i++) {
-        OutputInfo* output_info = &wayland_ctx->outputs[i];
-        if (output_info->width > max_width) max_width = output_info->width;
-        if (output_info->height > max_height) max_height = output_info->height;
-    }
-    
     // 如果所有输出分辨率相同，可以优化处理
     int all_outputs_same = 1;
     if (wayland_ctx->num_outputs > 1) {
@@ -83,19 +75,16 @@ void load_wallpaper(const char* path) {
         
         printf("All outputs have same resolution: %dx%d, optimizing...\n", output_width, output_height);
         
-        // 缩放到输出的尺寸
-        unsigned char* resized_data = malloc(output_width * output_height * 4);
+        // 使用新的缩放模块进行缩放（填充模式：按比例缩放再裁切）
+        int output_size;
+        unsigned char* resized_data = scale_image(img_data, width, height, 
+                                                 output_width, output_height, 
+                                                 SCALE_MODE_FILL, &output_size);
         if (!resized_data) {
-            fprintf(stderr, "Failed to allocate memory for resized image\n");
+            fprintf(stderr, "Failed to scale image\n");
             stbi_image_free(img_data);
             return;
         }
-
-        // 使用stb_image_resize进行缩放
-        stbir_resize_uint8_linear(img_data, width, height, 0,
-                                  resized_data, output_width, output_height, 0,
-                                  STBIR_4CHANNEL);
-        printf("Image resized to: %dx%d\n", output_width, output_height);
 
         // 由于Wayland的ARGB8888在小端序系统上实际是BGRA字节序，需要转换颜色通道
         // 将RGBA转换为BGRA，以正确显示颜色
@@ -133,18 +122,15 @@ void load_wallpaper(const char* path) {
             
             printf("Processing output %d: %dx%d\n", i, output_width, output_height);
             
-            // 缩放到当前输出的尺寸
-            unsigned char* resized_data = malloc(output_width * output_height * 4);
+            // 使用新的缩放模块进行缩放（填充模式：按比例缩放再裁切）
+            int output_size;
+            unsigned char* resized_data = scale_image(img_data, width, height, 
+                                                     output_width, output_height, 
+                                                     SCALE_MODE_FILL, &output_size);
             if (!resized_data) {
-                fprintf(stderr, "Failed to allocate memory for resized image for output %d\n", i);
+                fprintf(stderr, "Failed to scale image for output %d\n", i);
                 continue;
             }
-
-            // 使用stb_image_resize进行缩放
-            stbir_resize_uint8_linear(img_data, width, height, 0,
-                                      resized_data, output_width, output_height, 0,
-                                      STBIR_4CHANNEL);
-            printf("Image resized for output %d to: %dx%d\n", i, output_width, output_height);
 
             // 由于Wayland的ARGB8888在小端序系统上实际是BGRA字节序，需要转换颜色通道
             // 将RGBA转换为BGRA，以正确显示颜色
@@ -189,7 +175,15 @@ void run() {
 
     load_wallpaper("/home/zjx/Pictures/wallpaper/01.jpg");
 
+    int is_update = 1;
+
     while (!should_exit) {
+
+        if (is_update == 0) {
+            usleep(50000);
+            continue;
+        }
+
         // 为每个输出提交表面更改 - 只在初始化时或需要更新时执行
         for (int i = 0; i < wayland_ctx->num_outputs; i++) {
             OutputInfo* output_info = &wayland_ctx->outputs[i];
@@ -214,6 +208,7 @@ void run() {
             break; // 错误，退出循环
         }
         
+        is_update = 0;
         // 短暂休眠以减少CPU使用，但只在没有事件时
         usleep(50000); // 50ms instead of 16ms to reduce CPU usage
     }

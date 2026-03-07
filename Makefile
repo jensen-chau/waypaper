@@ -18,7 +18,8 @@ PROTOCOL_SOURCES = $(addprefix $(SRC_PROTOCOL_DIR)/, $(notdir $(PROTOCOL_XMLS:.x
 SOURCES = src/main.c \
           src/wayland_context.c \
 		  src/context.c \
-		  src/utils.c
+		  src/utils.c \
+		  src/scale.c
 
 OBJECTS = $(SOURCES:src/%.c=$(BUILD_DIR)/%.o)
 PROTOCOL_OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(PROTOCOL_SOURCES:.c=.o)))
