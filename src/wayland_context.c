@@ -184,7 +184,7 @@ struct WaylandContext* wayland_context_init(int width, int height) {
 }
 
 void create_pool(struct WaylandContext* ctx, int width, int height, int channels) {
-    printf("Creating pool: %dx%d\n", ctx->width, ctx->height);
+    printf("Creating pool: %dx%d\n", width, height);
     char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
     int fd = mkstemp(tmp_name);
     if (fd < 0) {
@@ -192,8 +192,8 @@ void create_pool(struct WaylandContext* ctx, int width, int height, int channels
         return;
     }
 
-    int stride = channels * ctx->width;
-    int size = ctx->width * ctx->height * channels; // 每像素4字节 (XRGB8888)
+    int stride = channels * width;
+    int size = width * height * channels; // 每像素4字节 (XRGB8888)
     if (ftruncate(fd, size) < 0) {
         fprintf(stderr, "Failed to truncate file\n");
         close(fd);
@@ -216,7 +216,7 @@ void create_pool(struct WaylandContext* ctx, int width, int height, int channels
     }
 
     ctx->buffer = wl_shm_pool_create_buffer(
-        ctx->pool, 0, ctx->width, ctx->height, stride, WL_SHM_FORMAT_ARGB8888);
+        ctx->pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
     if (!ctx->buffer) {
         fprintf(stderr, "Failed to create buffer\n");
         wl_shm_pool_destroy(ctx->pool);

@@ -43,17 +43,53 @@ void load_wallpaper(const char* path) {
     int width, height;
     int channels_in_file;
     unsigned char* img_data =
-        stbi_load(path, &width, &height, &channels_in_file, 3);
+        stbi_load(path, &width, &height, &channels_in_file, 4);
     if (img_data == NULL) {
-        fprintf(stderr, "Failed to load image\n");
+        fprintf(stderr, "Failed to load image: %s\n", stbi_failure_reason());
         return;
     }
     printf("Image loaded: %dx%d, channels:%d\n", width, height,
            channels_in_file);
 
-    create_pool(ctx->wayland_context, width, height, channels_in_file);
+    // 缩放到目标尺寸
+    int target_width = 1980;
+    int target_height = 1080;
+    unsigned char* resized_data = malloc(target_width * target_height * 4);
+    if (!resized_data) {
+        fprintf(stderr, "Failed to allocate memory for resized image\n");
+        stbi_image_free(img_data);
+        return;
+    }
 
-    ctx->wayland_context->shm_data = (void*)img_data;
+    // 使用stb_image_resize进行缩放
+    stbir_resize_uint8_linear(img_data, width, height, 0,
+                              resized_data, target_width, target_height, 0,
+                              STBIR_4CHANNEL);
+    printf("Image resized to: %dx%d\n", target_width, target_height);
+
+    // 由于Wayland的ARGB8888在小端序系统上实际是BGRA字节序，需要转换颜色通道
+    // 将RGBA转换为BGRA，以正确显示颜色
+    for (int i = 0; i < target_width * target_height; i++) {
+        unsigned char r = resized_data[i * 4 + 0];
+        unsigned char b = resized_data[i * 4 + 2];
+        resized_data[i * 4 + 0] = b; // R <- B
+        resized_data[i * 4 + 2] = r; // B <- R
+        // G 和 A 保持不变
+    }
+
+    // 先创建pool
+    create_pool(ctx->wayland_context, target_width, target_height, 4);
+
+    // 将转换后的图片数据复制到SHM缓冲区
+    if (ctx->wayland_context->shm_data) {
+        memcpy(ctx->wayland_context->shm_data, resized_data, 
+               target_width * target_height * 4);
+        printf("Resized image data copied to SHM buffer\n");
+    }
+
+    // 释放内存
+    free(resized_data);
+    stbi_image_free(img_data);
 }
 
 void run() {
