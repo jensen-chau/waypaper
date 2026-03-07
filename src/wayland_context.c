@@ -17,8 +17,107 @@
 #include "xdg-shell-protocol.h"
 #include "wl_pointer_handle.h"
 
+static void output_geometry(void *data, struct wl_output *wl_output,
+                           int32_t x, int32_t y, int32_t physical_width, int32_t physical_height,
+                           int32_t subpixel, const char *make, const char *model,
+                           int32_t transform) {
+    printf("Output geometry: x=%d, y=%d, width=%d, height=%d\n", x, y, physical_width, physical_height);
+}
 
-void create_surface(struct WaylandContext* ctx);
+static void output_mode(void *data, struct wl_output *wl_output,
+                       uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
+    // 只处理当前模式
+    if (flags & WL_OUTPUT_MODE_CURRENT) {
+        OutputInfo *output = (OutputInfo*)data;
+        output->width = width;
+        output->height = height;
+        printf("Output mode: %dx%d (current)\n", width, height);
+    }
+}
+
+static void output_done(void *data, struct wl_output *wl_output) {
+    printf("Output done event\n");
+}
+
+static void output_scale(void *data, struct wl_output *wl_output, int32_t scale) {
+    OutputInfo *output = (OutputInfo*)data;
+    output->scale = scale;
+    printf("Output scale: %d\n", scale);
+}
+
+static const struct wl_output_listener output_listener = {
+    .geometry = output_geometry,
+    .mode = output_mode,
+    .done = output_done,
+    .scale = output_scale,
+};
+
+static void layer_surface_configure(void* data,
+                                    struct zwlr_layer_surface_v1* surface,
+                                    uint32_t serial, uint32_t width,
+                                    uint32_t height) {
+    OutputInfo* output_info = (OutputInfo*)data;
+    if (!output_info) {
+        fprintf(stderr, "Error: output_info is NULL in layer_surface_configure\n");
+        return;
+    }
+
+    zwlr_layer_surface_v1_ack_configure(surface, serial);
+    output_info->configured = 1;
+    printf("Layer surface configured: %dx%d\n", width, height);
+    output_info->width = width;
+    output_info->height = height;
+}
+
+static void layer_surface_closed(void* data,
+                                 struct zwlr_layer_surface_v1* surface) {
+    printf("Layer surface closed\n");
+}
+
+static struct zwlr_layer_surface_v1_listener layer_surface_listener = {
+    .configure = layer_surface_configure,
+    .closed = layer_surface_closed,
+};
+
+void create_surface_for_output(struct WaylandContext* ctx, int output_idx, int32_t width, int32_t height) {
+    printf("Creating surface for output %d: %dx%d\n", output_idx, width, height);
+    
+    OutputInfo* output_info = &ctx->outputs[output_idx];
+    
+    output_info->surface = wl_compositor_create_surface(ctx->compositor);
+    if (!output_info->surface) {
+        fprintf(stderr, "Failed to create surface for output %d\n", output_idx);
+        return;
+    }
+
+    output_info->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+        ctx->layer_shell, output_info->surface, output_info->output, 
+        ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wallpaper");
+    if (!output_info->layer_surface) {
+        fprintf(stderr, "Failed to get layer surface for output %d\n", output_idx);
+        return;
+    }
+
+    zwlr_layer_surface_v1_set_size(output_info->layer_surface, width, height);
+    zwlr_layer_surface_v1_set_anchor(
+        output_info->layer_surface,
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | 
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+    zwlr_layer_surface_v1_set_exclusive_zone(output_info->layer_surface, -1);
+
+    // 注册层表面监听器
+    zwlr_layer_surface_v1_add_listener(output_info->layer_surface,
+                                       &layer_surface_listener, output_info);
+
+    wl_surface_commit(output_info->surface);
+    printf("Surface committed for output %d\n", output_idx);
+    
+    // 等待层表面配置
+    while (!output_info->configured) {
+        wl_display_roundtrip(ctx->display);
+    }
+    printf("Surface created successfully for output %d\n", output_idx);
+}
 
 void on_global(void* data, struct wl_registry* registry, uint32_t name,
                const char* interface, uint32_t version) {
@@ -27,8 +126,6 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
         fprintf(stderr, "on_global: registry is NULL!\n");
         return;
     }
-
-    //printf("name:%d,interface:%s,version:%d\n", name, interface, version);
 
     struct WaylandContext* ctx = (struct WaylandContext*)data;
 
@@ -76,6 +173,24 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
         } else {
             printf("wl_seat bind successfully (version %d)\n", version);
         }
+    } else if (strcmp(wl_output_interface.name, interface) == 0) {
+        // 处理输出设备
+        if (ctx->num_outputs < MAX_OUTPUTS) {
+            OutputInfo* output_info = &ctx->outputs[ctx->num_outputs];
+            output_info->id = name;
+            output_info->output = wl_registry_bind(registry, name, &wl_output_interface, 2);
+            output_info->configured = 0;
+            output_info->width = ctx->width;  // 默认值
+            output_info->height = ctx->height; // 默认值
+            output_info->scale = 1;
+            
+            wl_output_add_listener(output_info->output, &output_listener, output_info);
+            printf("Bound output %d (id: %d)\n", ctx->num_outputs, name);
+            
+            ctx->num_outputs++;
+        } else {
+            printf("Maximum number of outputs reached\n");
+        }
     }
 }
 
@@ -86,30 +201,53 @@ void on_global_remove(void* data, struct wl_registry* registry, uint32_t name) {
 static struct wl_registry_listener wayland_registry_listener = {
     .global = on_global, .global_remove = on_global_remove};
 
-static void layer_surface_configure(void* data,
-                                    struct zwlr_layer_surface_v1* surface,
-                                    uint32_t serial, uint32_t width,
-                                    uint32_t height) {
-    struct WaylandContext* ctx = (struct WaylandContext*)data;
-    if (!ctx) {
-        fprintf(stderr, "Error: ctx is NULL in layer_surface_configure\n");
+void create_pool_for_output(struct WaylandContext* ctx, int output_idx, int width, int height, int channels) {
+    printf("Creating pool for output %d: %dx%d\n", output_idx, width, height);
+    OutputInfo* output_info = &ctx->outputs[output_idx];
+    
+    char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
+    int fd = mkstemp(tmp_name);
+    if (fd < 0) {
+        fprintf(stderr, "Failed to create temporary file for output %d\n", output_idx);
         return;
     }
 
-    zwlr_layer_surface_v1_ack_configure(surface, serial);
-    ctx->configured = 1;
-    printf("Layer surface configured: %dx%d\n", width, height);
+    int stride = channels * width;
+    int size = width * height * channels; // 每像素4字节 (XRGB8888)
+    if (ftruncate(fd, size) < 0) {
+        fprintf(stderr, "Failed to truncate file for output %d\n", output_idx);
+        close(fd);
+        return;
+    }
+
+    output_info->shm_data = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (output_info->shm_data == MAP_FAILED) {
+        fprintf(stderr, "Failed to mmap file for output %d\n", output_idx);
+        close(fd);
+        return;
+    }
+
+    output_info->pool = wl_shm_create_pool(ctx->shm, fd, size);
+    if (!output_info->pool) {
+        fprintf(stderr, "Failed to create shm pool for output %d\n", output_idx);
+        munmap(output_info->shm_data, size);
+        close(fd);
+        return;
+    }
+
+    output_info->buffer = wl_shm_pool_create_buffer(
+        output_info->pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
+    if (!output_info->buffer) {
+        fprintf(stderr, "Failed to create buffer for output %d\n", output_idx);
+        wl_shm_pool_destroy(output_info->pool);
+        munmap(output_info->shm_data, size);
+        close(fd);
+        return;
+    }
+
+    unlink(tmp_name);
+    printf("Pool created successfully for output %d\n", output_idx);
 }
-
-static void layer_surface_closed(void* data,
-                                 struct zwlr_layer_surface_v1* surface) {
-}
-
-static struct zwlr_layer_surface_v1_listener layer_surface_listener = {
-    .configure = layer_surface_configure,
-    .closed = layer_surface_closed,
-};
-
 
 struct WaylandContext* wayland_context_init(int width, int height) {
     printf("Connecting to Wayland display...\n");
@@ -137,26 +275,21 @@ struct WaylandContext* wayland_context_init(int width, int height) {
         return NULL;
     }
 
-    printf("Adding registry listener...\n");
-    wl_registry_add_listener(registry, &wayland_registry_listener, ctx);
-
-    printf("Dispatching events...\n");
-    int ret = wl_display_roundtrip(display);
-    if (ret < 0) {
-        fprintf(stderr, "Failed to dispatch events: %d\n", ret);
-        free(ctx);
-        wl_registry_destroy(registry);
-        wl_display_disconnect(display);
-        return NULL;
-    }
-
-    fflush(stdout);
-
+    // 初始化输出数组
+    memset(ctx, 0, sizeof(struct WaylandContext));
     ctx->display = display;
     ctx->width = width;
     ctx->height = height;
     ctx->registry = registry;
-    ctx->configured = 0;
+    ctx->num_outputs = 0;
+
+    printf("Adding registry listener...\n");
+    wl_registry_add_listener(registry, &wayland_registry_listener, ctx);
+
+    printf("Dispatching events...\n");
+    // 多次roundtrip以确保获取所有输出信息
+    wl_display_roundtrip(display);
+    wl_display_roundtrip(display);
 
     // 确保所有服务都已绑定
     wl_display_roundtrip(display);
@@ -176,58 +309,27 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     // 再次确保事件处理完成
     wl_display_roundtrip(display);
 
-    printf("Creating surface...\n");
-    create_surface(ctx);
+    // 为每个输出创建表面
+    for (int i = 0; i < ctx->num_outputs; i++) {
+        OutputInfo* output_info = &ctx->outputs[i];
+        printf("Creating surface for output %d: %dx%d\n", i, output_info->width, output_info->height);
+        create_surface_for_output(ctx, i, output_info->width, output_info->height);
+    }
 
-    printf("Wayland context initialized successfully\n");
+    printf("Wayland context initialized successfully with %d outputs\n", ctx->num_outputs);
     return ctx;
 }
 
+// 保留旧函数名以兼容现有代码，但调用新的多屏实现
 void create_pool(struct WaylandContext* ctx, int width, int height, int channels) {
-    printf("Creating pool: %dx%d\n", width, height);
-    char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
-    int fd = mkstemp(tmp_name);
-    if (fd < 0) {
-        fprintf(stderr, "Failed to create temporary file\n");
-        return;
+    // 为第一个输出创建池（向后兼容）
+    if (ctx->num_outputs > 0) {
+        create_pool_for_output(ctx, 0, width, height, channels);
+    } else {
+        // 如果没有检测到输出，创建默认输出
+        ctx->num_outputs = 1;
+        create_pool_for_output(ctx, 0, width, height, channels);
     }
-
-    int stride = channels * width;
-    int size = width * height * channels; // 每像素4字节 (XRGB8888)
-    if (ftruncate(fd, size) < 0) {
-        fprintf(stderr, "Failed to truncate file\n");
-        close(fd);
-        return;
-    }
-
-    ctx->shm_data = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (ctx->shm_data == MAP_FAILED) {
-        fprintf(stderr, "Failed to mmap file\n");
-        close(fd);
-        return;
-    }
-
-    ctx->pool = wl_shm_create_pool(ctx->shm, fd, size);
-    if (!ctx->pool) {
-        fprintf(stderr, "Failed to create shm pool\n");
-        munmap(ctx->shm_data, size);
-        close(fd);
-        return;
-    }
-
-    ctx->buffer = wl_shm_pool_create_buffer(
-        ctx->pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
-    if (!ctx->buffer) {
-        fprintf(stderr, "Failed to create buffer\n");
-        wl_shm_pool_destroy(ctx->pool);
-        munmap(ctx->shm_data, size);
-        close(fd);
-        return;
-    }
-
-    unlink(tmp_name);
-    printf("Pool created successfully\n");
-    
 }
 
 void wayland_context_cleanup(struct WaylandContext* ctx) {
@@ -235,24 +337,33 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
 
     printf("Cleaning up Wayland context...\n");
 
-    if (ctx->layer_surface) {
-        zwlr_layer_surface_v1_destroy(ctx->layer_surface);
-    }
+    // 清理每个输出
+    for (int i = 0; i < ctx->num_outputs; i++) {
+        OutputInfo* output_info = &ctx->outputs[i];
+        
+        if (output_info->layer_surface) {
+            zwlr_layer_surface_v1_destroy(output_info->layer_surface);
+        }
 
-    if (ctx->surface) {
-        wl_surface_destroy(ctx->surface);
-    }
+        if (output_info->surface) {
+            wl_surface_destroy(output_info->surface);
+        }
 
-    if (ctx->pool) {
-        wl_shm_pool_destroy(ctx->pool);
-    }
+        if (output_info->pool) {
+            wl_shm_pool_destroy(output_info->pool);
+        }
 
-    if (ctx->buffer) {
-        wl_buffer_destroy(ctx->buffer);
-    }
+        if (output_info->buffer) {
+            wl_buffer_destroy(output_info->buffer);
+        }
 
-    if (ctx->shm_data) {
-        munmap(ctx->shm_data, ctx->width * ctx->height * 4);
+        if (output_info->shm_data) {
+            munmap(output_info->shm_data, output_info->width * output_info->height * 4);
+        }
+        
+        if (output_info->output) {
+            wl_output_destroy(output_info->output);
+        }
     }
 
     if (ctx->compositor) {
@@ -282,42 +393,4 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
     free(ctx);
 }
 
-void create_surface(struct WaylandContext* ctx) {
-    printf("Creating surface...\n");
-    ctx->surface = wl_compositor_create_surface(ctx->compositor);
-    printf("Surface pointer: %p\n", (void*)ctx->surface);
-    if (!ctx->surface) {
-        fprintf(stderr, "Failed to create surface\n");
-        return;
-    }
 
-    ctx->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-        ctx->layer_shell, ctx->surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND,
-        "game");
-    printf("Layer surface pointer: %p\n", (void*)ctx->layer_surface);
-    if (!ctx->layer_surface) {
-        fprintf(stderr, "Failed to get layer surface\n");
-        return;
-    }
-
-    zwlr_layer_surface_v1_set_size(ctx->layer_surface, ctx->width, ctx->height);
-    zwlr_layer_surface_v1_set_anchor(
-        ctx->layer_surface,
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
-    zwlr_layer_surface_v1_set_exclusive_zone(ctx->layer_surface, -1);
-    //zwlr_layer_surface_v1_set_keyboard_interactivity(ctx->layer_surface, 1);
-
-    // 注册层表面监听器
-    zwlr_layer_surface_v1_add_listener(ctx->layer_surface,
-                                       &layer_surface_listener, ctx);
-
-    wl_surface_commit(ctx->surface);
-    printf("Surface committed\n");
-    wl_display_roundtrip(ctx->display);
-
-    // 等待层表面配置
-    while (!ctx->configured) {
-        wl_display_roundtrip(ctx->display);
-    }
-    printf("Surface created successfully\n");
-}

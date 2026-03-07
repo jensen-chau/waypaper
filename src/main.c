@@ -7,11 +7,9 @@
 #include "wayland_context.h"
 
 
-
-
 int main() {
     printf("Initializing context...\n");
-    struct Context* context = get_context(1980, 1080);
+    struct Context* context = get_context(1920, 1080); // 使用默认分辨率
 
     if (!context) {
         fprintf(stderr, "Failed to initialize context\n");
@@ -26,7 +24,7 @@ int main() {
 
     run();
 
-    printf("Wayland context created successfully\n");
+    printf("Wayland context created successfully with %d outputs\n", wayland_ctx->num_outputs);
 
     return 0;
 }
