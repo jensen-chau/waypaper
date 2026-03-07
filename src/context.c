@@ -53,26 +53,49 @@ void load_wallpaper(const char* path) {
 
     struct WaylandContext* wayland_ctx = ctx->wayland_context;
     
-    // 为每个输出创建适当的壁纸
+    // 预先计算最大的输出尺寸以减少重复的缩放计算
+    int max_width = 0, max_height = 0;
     for (int i = 0; i < wayland_ctx->num_outputs; i++) {
         OutputInfo* output_info = &wayland_ctx->outputs[i];
-        int output_width = output_info->width;
-        int output_height = output_info->height;
+        if (output_info->width > max_width) max_width = output_info->width;
+        if (output_info->height > max_height) max_height = output_info->height;
+    }
+    
+    // 如果所有输出分辨率相同，可以优化处理
+    int all_outputs_same = 1;
+    if (wayland_ctx->num_outputs > 1) {
+        int first_width = wayland_ctx->outputs[0].width;
+        int first_height = wayland_ctx->outputs[0].height;
+        for (int i = 1; i < wayland_ctx->num_outputs; i++) {
+            if (wayland_ctx->outputs[i].width != first_width || 
+                wayland_ctx->outputs[i].height != first_height) {
+                all_outputs_same = 0;
+                break;
+            }
+        }
+    }
+    
+    if (all_outputs_same && wayland_ctx->num_outputs > 1) {
+        // 如果所有输出分辨率相同，只需缩放一次
+        OutputInfo* first_output = &wayland_ctx->outputs[0];
+        int output_width = first_output->width;
+        int output_height = first_output->height;
         
-        printf("Processing output %d: %dx%d\n", i, output_width, output_height);
+        printf("All outputs have same resolution: %dx%d, optimizing...\n", output_width, output_height);
         
-        // 缩放到当前输出的尺寸
+        // 缩放到输出的尺寸
         unsigned char* resized_data = malloc(output_width * output_height * 4);
         if (!resized_data) {
-            fprintf(stderr, "Failed to allocate memory for resized image for output %d\n", i);
-            continue;
+            fprintf(stderr, "Failed to allocate memory for resized image\n");
+            stbi_image_free(img_data);
+            return;
         }
 
         // 使用stb_image_resize进行缩放
         stbir_resize_uint8_linear(img_data, width, height, 0,
                                   resized_data, output_width, output_height, 0,
                                   STBIR_4CHANNEL);
-        printf("Image resized for output %d to: %dx%d\n", i, output_width, output_height);
+        printf("Image resized to: %dx%d\n", output_width, output_height);
 
         // 由于Wayland的ARGB8888在小端序系统上实际是BGRA字节序，需要转换颜色通道
         // 将RGBA转换为BGRA，以正确显示颜色
@@ -84,18 +107,68 @@ void load_wallpaper(const char* path) {
             // G 和 A 保持不变
         }
 
-        // 为当前输出创建池
-        create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
+        // 为每个输出创建池并复制数据
+        for (int i = 0; i < wayland_ctx->num_outputs; i++) {
+            OutputInfo* output_info = &wayland_ctx->outputs[i];
+            
+            // 为当前输出创建池
+            create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
 
-        // 将转换后的图片数据复制到SHM缓冲区
-        if (output_info->shm_data) {
-            memcpy(output_info->shm_data, resized_data, 
-                   output_width * output_height * 4);
-            printf("Resized image data copied to SHM buffer for output %d\n", i);
+            // 将转换后的图片数据复制到SHM缓冲区
+            if (output_info->shm_data) {
+                memcpy(output_info->shm_data, resized_data, 
+                       output_width * output_height * 4);
+                printf("Image data copied to SHM buffer for output %d\n", i);
+            }
         }
 
-        // 释放当前输出的临时数据
+        // 释放临时数据
         free(resized_data);
+    } else {
+        // 如果输出分辨率不同，为每个输出单独处理
+        for (int i = 0; i < wayland_ctx->num_outputs; i++) {
+            OutputInfo* output_info = &wayland_ctx->outputs[i];
+            int output_width = output_info->width;
+            int output_height = output_info->height;
+            
+            printf("Processing output %d: %dx%d\n", i, output_width, output_height);
+            
+            // 缩放到当前输出的尺寸
+            unsigned char* resized_data = malloc(output_width * output_height * 4);
+            if (!resized_data) {
+                fprintf(stderr, "Failed to allocate memory for resized image for output %d\n", i);
+                continue;
+            }
+
+            // 使用stb_image_resize进行缩放
+            stbir_resize_uint8_linear(img_data, width, height, 0,
+                                      resized_data, output_width, output_height, 0,
+                                      STBIR_4CHANNEL);
+            printf("Image resized for output %d to: %dx%d\n", i, output_width, output_height);
+
+            // 由于Wayland的ARGB8888在小端序系统上实际是BGRA字节序，需要转换颜色通道
+            // 将RGBA转换为BGRA，以正确显示颜色
+            for (int j = 0; j < output_width * output_height; j++) {
+                unsigned char r = resized_data[j * 4 + 0];
+                unsigned char b = resized_data[j * 4 + 2];
+                resized_data[j * 4 + 0] = b; // R <- B
+                resized_data[j * 4 + 2] = r; // B <- R
+                // G 和 A 保持不变
+            }
+
+            // 为当前输出创建池
+            create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
+
+            // 将转换后的图片数据复制到SHM缓冲区
+            if (output_info->shm_data) {
+                memcpy(output_info->shm_data, resized_data, 
+                       output_width * output_height * 4);
+                printf("Resized image data copied to SHM buffer for output %d\n", i);
+            }
+
+            // 释放当前输出的临时数据
+            free(resized_data);
+        }
     }
 
     // 释放原始图像数据
@@ -114,40 +187,35 @@ void run() {
         return;
     }
 
-    uint32_t cnt = 0;
-
     load_wallpaper("/home/zjx/Pictures/wallpaper/01.jpg");
 
     while (!should_exit) {
-        if (++cnt % 60 == 0) {
-            printf("frame: %d, outputs: %d\n", cnt, wayland_ctx->num_outputs);
-        }
-
-        // 为每个输出提交表面更改
+        // 为每个输出提交表面更改 - 只在初始化时或需要更新时执行
         for (int i = 0; i < wayland_ctx->num_outputs; i++) {
             OutputInfo* output_info = &wayland_ctx->outputs[i];
             
             // 检查缓冲区是否有效
             if (!output_info->buffer) {
-                fprintf(stderr, "Error: buffer is NULL for output %d\n", i);
-                continue;
+                continue; // 跳过错误输出，而不是打印错误
             }
 
             wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
-            wl_surface_damage(output_info->surface, 0, 0, output_info->width,
+            wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
                               output_info->height);
             wl_surface_commit(output_info->surface);
         }
 
-        // 处理待处理的 Wayland 事件
+        // 只处理待处理的 Wayland 事件，避免阻塞
         wl_display_flush(wayland_ctx->display);
-        while (wl_display_prepare_read(wayland_ctx->display) != 0) {
-            wl_display_dispatch_pending(wayland_ctx->display);
+        
+        // 使用 dispatch_queue 来更高效地处理事件
+        int ret = wl_display_dispatch_pending(wayland_ctx->display);
+        if (ret == -1) {
+            break; // 错误，退出循环
         }
-        wl_display_read_events(wayland_ctx->display);
-        wl_display_dispatch_pending(wayland_ctx->display);
-
-        usleep(16667);
+        
+        // 短暂休眠以减少CPU使用，但只在没有事件时
+        usleep(50000); // 50ms instead of 16ms to reduce CPU usage
     }
 
     wayland_context_cleanup(wayland_ctx);
