@@ -1,5 +1,5 @@
 CC = gcc
-TARGET = way_ui
+TARGET = waypaper
 
 BUILD_DIR = build
 
@@ -18,13 +18,6 @@ PROTOCOL_SOURCES = $(addprefix $(SRC_PROTOCOL_DIR)/, $(notdir $(PROTOCOL_XMLS:.x
 SOURCES = src/main.c \
           src/wayland_context.c \
 		  src/context.c \
-		  src/node.c \
-		  src/box.c \
-		  src/button.c \
-		  src/label.c \
-		  src/text_input.c \
-		  src/checkbox.c \
-		  src/slider.c \
 		  src/utils.c
 
 OBJECTS = $(SOURCES:src/%.c=$(BUILD_DIR)/%.o)
@@ -33,10 +26,9 @@ PROTOCOL_OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(PROTOCOL_SOURCES:.c=.o)
 WAYLAND_LIBS = -lwayland-client
 MATH_LIBS = -lm
 XBKB_LIBS = -lxkbcommon
-LDFLAGS = $(WAYLAND_LIBS) $(MATH_LIBS) $(XBKB_LIBS)
+LDFLAGS = $(WAYLAND_LIBS) $(MATH_LIBS) $(XBKB_LIBS) -lm -lpthread
 
-CFLAGS = -g -Wall $(INCLUDES) -I$(INCLUDE_PROTOCOL_DIR) $(shell pkg-config --cflags cairo pango pangocairo)
-LIBS = $(shell pkg-config --libs cairo pango pangocairo)
+CFLAGS = -g -Wall $(INCLUDES) -I$(INCLUDE_PROTOCOL_DIR)
 
 CFLAGS += $(LIBS)
 

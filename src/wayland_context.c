@@ -12,15 +12,11 @@
 #include <wayland-client-core.h>
 #include <wayland-client.h>
 #include <wayland-util.h>
-#include <cairo.h>
-#include <cairo-xlib.h>
 
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "xdg-shell-protocol.h"
 #include "wl_pointer_handle.h"
-#include "wl_keyboard_handle.h"
 
-void create_pool(struct WaylandContext* ctx);
 
 void create_surface(struct WaylandContext* ctx);
 
@@ -180,19 +176,14 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     // 再次确保事件处理完成
     wl_display_roundtrip(display);
 
-    printf("Creating pool...\n");
-    create_pool(ctx);
     printf("Creating surface...\n");
     create_surface(ctx);
-
-    ctx->keyboard = wl_seat_get_keyboard(ctx->seat);
-    wl_keyboard_add_listener(ctx->keyboard, &keyboard_listener, ctx);
 
     printf("Wayland context initialized successfully\n");
     return ctx;
 }
 
-void create_pool(struct WaylandContext* ctx) {
+void create_pool(struct WaylandContext* ctx, int width, int height, int channels) {
     printf("Creating pool: %dx%d\n", ctx->width, ctx->height);
     char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
     int fd = mkstemp(tmp_name);
@@ -201,8 +192,8 @@ void create_pool(struct WaylandContext* ctx) {
         return;
     }
 
-    int stride = 4 * ctx->width;
-    int size = ctx->width * ctx->height * 4; // 每像素4字节 (XRGB8888)
+    int stride = channels * ctx->width;
+    int size = ctx->width * ctx->height * channels; // 每像素4字节 (XRGB8888)
     if (ftruncate(fd, size) < 0) {
         fprintf(stderr, "Failed to truncate file\n");
         close(fd);
@@ -225,7 +216,7 @@ void create_pool(struct WaylandContext* ctx) {
     }
 
     ctx->buffer = wl_shm_pool_create_buffer(
-        ctx->pool, 0, ctx->width, ctx->height, stride, WL_SHM_FORMAT_XRGB8888);
+        ctx->pool, 0, ctx->width, ctx->height, stride, WL_SHM_FORMAT_ARGB8888);
     if (!ctx->buffer) {
         fprintf(stderr, "Failed to create buffer\n");
         wl_shm_pool_destroy(ctx->pool);
@@ -237,41 +228,12 @@ void create_pool(struct WaylandContext* ctx) {
     unlink(tmp_name);
     printf("Pool created successfully\n");
     
-    // 创建Cairo surface和context
-    printf("Creating Cairo surface and context...\n");
-    ctx->cairo_surface = cairo_image_surface_create_for_data(
-        (unsigned char*)ctx->shm_data, 
-        CAIRO_FORMAT_ARGB32, 
-        ctx->width, 
-        ctx->height, 
-        stride);
-    if (!ctx->cairo_surface) {
-        fprintf(stderr, "Failed to create Cairo surface\n");
-        return;
-    }
-    
-    ctx->cairo_context = cairo_create(ctx->cairo_surface);
-    if (!ctx->cairo_context) {
-        fprintf(stderr, "Failed to create Cairo context\n");
-        cairo_surface_destroy(ctx->cairo_surface);
-        return;
-    }
-    
-    printf("Cairo surface and context created successfully\n");
 }
 
 void wayland_context_cleanup(struct WaylandContext* ctx) {
     if (!ctx) return;
 
     printf("Cleaning up Wayland context...\n");
-
-    // 清理Cairo资源
-    if (ctx->cairo_context) {
-        cairo_destroy(ctx->cairo_context);
-    }
-    if (ctx->cairo_surface) {
-        cairo_surface_destroy(ctx->cairo_surface);
-    }
 
     if (ctx->layer_surface) {
         zwlr_layer_surface_v1_destroy(ctx->layer_surface);
@@ -330,7 +292,7 @@ void create_surface(struct WaylandContext* ctx) {
     }
 
     ctx->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-        ctx->layer_shell, ctx->surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY,
+        ctx->layer_shell, ctx->surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND,
         "game");
     printf("Layer surface pointer: %p\n", (void*)ctx->layer_surface);
     if (!ctx->layer_surface) {
@@ -343,7 +305,7 @@ void create_surface(struct WaylandContext* ctx) {
         ctx->layer_surface,
         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
     zwlr_layer_surface_v1_set_exclusive_zone(ctx->layer_surface, -1);
-    zwlr_layer_surface_v1_set_keyboard_interactivity(ctx->layer_surface, 1);
+    //zwlr_layer_surface_v1_set_keyboard_interactivity(ctx->layer_surface, 1);
 
     // 注册层表面监听器
     zwlr_layer_surface_v1_add_listener(ctx->layer_surface,

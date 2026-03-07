@@ -6,19 +6,9 @@
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 
 typedef struct ClientState {
-    struct wl_keyboard *keyboard;
     struct wl_surface *focused_surface;
-    
     struct xkb_context *context;
-    struct xkb_keymap *keymap;
-    struct xkb_state *xkb_state;
     
-    int ctrl_pressed;
-    int shift_pressed;
-    int alt_pressed;
-    
-    int32_t repeat_rate;
-    int32_t repeat_delay;
 } ClientState;
 
 struct WaylandContext {
@@ -42,13 +32,12 @@ struct WaylandContext {
     int height;
     int configured;
     
-    // Cairo rendering support
-    void* cairo_surface;
-    void* cairo_context;
 };
 
 struct WaylandContext *wayland_context_init(int width, int height);
 
 void wayland_context_cleanup(struct WaylandContext *ctx);
+
+void create_pool(struct WaylandContext *ctx, int width, int height, int channels);
 
 #endif
