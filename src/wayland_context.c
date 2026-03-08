@@ -6,10 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <linux/memfd.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <wayland-client-core.h>
+#include <unistd.h>
 #include <wayland-client.h>
 #include <wayland-util.h>
 
@@ -174,7 +177,7 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx, int widt
     OutputInfo* output_info = &ctx->outputs[output_idx];
     
     char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
-    int fd = mkstemp(tmp_name);
+    int fd = syscall(SYS_memfd_create, tmp_name, MFD_CLOEXEC);
     if (fd < 0) {
         fprintf(stderr, "Failed to create temporary file for output %d\n", output_idx);
         return;
@@ -213,7 +216,6 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx, int widt
         return;
     }
 
-    unlink(tmp_name);
     printf("Pool created successfully for output %d\n", output_idx);
 }
 

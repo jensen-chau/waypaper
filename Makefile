@@ -27,7 +27,8 @@ PROTOCOL_OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(PROTOCOL_SOURCES:.c=.o)
 WAYLAND_LIBS = -lwayland-client
 MATH_LIBS = -lm
 XBKB_LIBS = -lxkbcommon
-LDFLAGS = $(WAYLAND_LIBS) $(MATH_LIBS) $(XBKB_LIBS) -lm -lpthread
+LIBS = 
+LDFLAGS = $(LIBS) $(WAYLAND_LIBS) $(MATH_LIBS) $(XBKB_LIBS) -lm -lpthread
 
 CFLAGS = -g -Wall $(INCLUDES) -I$(INCLUDE_PROTOCOL_DIR) -DSTB_IMAGE_RESIZE_IMPLEMENTATION
 
