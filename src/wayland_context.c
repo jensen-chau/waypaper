@@ -1,9 +1,9 @@
 #include "wayland_context.h"
 
+#include "utils.h"
 #include <endian.h>
 #include <fcntl.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <linux/memfd.h>
@@ -26,7 +26,6 @@ static void output_geometry(void *data, struct wl_output *wl_output,
                            int32_t x, int32_t y, int32_t physical_width, int32_t physical_height,
                            int32_t subpixel, const char *make, const char *model,
                            int32_t transform) {
-    // 仅在调试模式下输出信息
     OutputInfo *output = (OutputInfo*)data;
     output->x = x;
     output->y = y;
@@ -34,7 +33,6 @@ static void output_geometry(void *data, struct wl_output *wl_output,
 
 static void output_mode(void *data, struct wl_output *wl_output,
                        uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
-    // 只处理当前模式
     if (flags & WL_OUTPUT_MODE_CURRENT) {
         OutputInfo *output = (OutputInfo*)data;
         output->width = width;
@@ -43,7 +41,6 @@ static void output_mode(void *data, struct wl_output *wl_output,
 }
 
 static void output_done(void *data, struct wl_output *wl_output) {
-    // 输出配置完成，无需处理
 }
 
 static void output_scale(void *data, struct wl_output *wl_output, int32_t scale) {
@@ -75,7 +72,6 @@ static void layer_surface_configure(void* data,
 
 static void layer_surface_closed(void* data,
                                  struct zwlr_layer_surface_v1* surface) {
-    // 层表面已关闭，无需处理
 }
 
 static struct zwlr_layer_surface_v1_listener layer_surface_listener = {
@@ -93,7 +89,7 @@ void create_surface_for_output(struct WaylandContext* ctx, int output_idx, int32
 
     output_info->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
         ctx->layer_shell, output_info->surface, output_info->output, 
-        ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wallpaper");
+        ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "waypaper");
     if (!output_info->layer_surface) {
         return;
     }
@@ -105,16 +101,12 @@ void create_surface_for_output(struct WaylandContext* ctx, int output_idx, int32
         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
     zwlr_layer_surface_v1_set_exclusive_zone(output_info->layer_surface, -1);
 
-    // 注册层表面监听器
     zwlr_layer_surface_v1_add_listener(output_info->layer_surface,
                                        &layer_surface_listener, output_info);
 
     wl_surface_commit(output_info->surface);
 
-    struct wp_viewport *viewport = wp_viewporter_get_viewport(ctx->viewporter, output_info->surface);
-
     
-    // 等待层表面配置
     while (!output_info->configured) {
         wl_display_roundtrip(ctx->display);
     }
@@ -150,8 +142,8 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
             output_info->id = name;
             output_info->output = wl_registry_bind(registry, name, &wl_output_interface, 2);
             output_info->configured = 0;
-            output_info->width = ctx->width;  // 默认值
-            output_info->height = ctx->height; // 默认值
+            output_info->width = ctx->width;  
+            output_info->height = ctx->height; 
             output_info->scale = 1;
             
             wl_output_add_listener(output_info->output, &output_listener, output_info);
@@ -166,41 +158,41 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
 }
 
 void on_global_remove(void* data, struct wl_registry* registry, uint32_t name) {
-    printf("on_global_remove: %d\n", name);
+    LOG("on_global_remove: %d\n", name);
 }
 
 static struct wl_registry_listener wayland_registry_listener = {
     .global = on_global, .global_remove = on_global_remove};
 
 void create_pool_for_output(struct WaylandContext* ctx, int output_idx, int width, int height, int channels) {
-    printf("Creating pool for output %d: %dx%d\n", output_idx, width, height);
+    LOG("Creating pool for output %d: %dx%d\n", output_idx, width, height);
     OutputInfo* output_info = &ctx->outputs[output_idx];
     
     char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
     int fd = syscall(SYS_memfd_create, tmp_name, MFD_CLOEXEC);
     if (fd < 0) {
-        fprintf(stderr, "Failed to create temporary file for output %d\n", output_idx);
+        ERR("Failed to create temporary file for output %d", output_idx);
         return;
     }
 
     int stride = channels * width;
-    int size = width * height * channels; // 每像素4字节 (XRGB8888)
+    int size = width * height * channels; 
     if (ftruncate(fd, size) < 0) {
-        fprintf(stderr, "Failed to truncate file for output %d\n", output_idx);
+        ERR("Failed to truncate file for output %d", output_idx);
         close(fd);
         return;
     }
 
     output_info->shm_data = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (output_info->shm_data == MAP_FAILED) {
-        fprintf(stderr, "Failed to mmap file for output %d\n", output_idx);
+        ERR("Failed to mmap file for output %d", output_idx);
         close(fd);
         return;
     }
 
     output_info->pool = wl_shm_create_pool(ctx->shm, fd, size);
     if (!output_info->pool) {
-        fprintf(stderr, "Failed to create shm pool for output %d\n", output_idx);
+        ERR("Failed to create shm pool for output %d", output_idx);
         munmap(output_info->shm_data, size);
         close(fd);
         return;
@@ -209,14 +201,14 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx, int widt
     output_info->buffer = wl_shm_pool_create_buffer(
         output_info->pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
     if (!output_info->buffer) {
-        fprintf(stderr, "Failed to create buffer for output %d\n", output_idx);
+        ERR("Failed to create buffer for output %d", output_idx);
         wl_shm_pool_destroy(output_info->pool);
         munmap(output_info->shm_data, size);
         close(fd);
         return;
     }
 
-    printf("Pool created successfully for output %d\n", output_idx);
+    LOG("Pool created successfully for output %d\n", output_idx);
 }
 
 struct WaylandContext* wayland_context_init(int width, int height) {
@@ -239,7 +231,6 @@ struct WaylandContext* wayland_context_init(int width, int height) {
         return NULL;
     }
 
-    // 初始化输出数组
     memset(ctx, 0, sizeof(struct WaylandContext));
     ctx->display = display;
     ctx->width = width;
@@ -249,11 +240,9 @@ struct WaylandContext* wayland_context_init(int width, int height) {
 
     wl_registry_add_listener(registry, &wayland_registry_listener, ctx);
 
-    // 多次roundtrip以确保获取所有输出信息
     wl_display_roundtrip(display);
     wl_display_roundtrip(display);
 
-    // 确保所有服务都已绑定
     wl_display_roundtrip(display);
 
     if (!ctx->seat) {
@@ -266,10 +255,8 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     ctx->pointer = wl_seat_get_pointer(ctx->seat);
     wl_pointer_add_listener(ctx->pointer, &pointer_listener, ctx);
 
-    // 再次确保事件处理完成
     wl_display_roundtrip(display);
 
-    // 为每个输出创建表面
     for (int i = 0; i < ctx->num_outputs; i++) {
         OutputInfo* output_info = &ctx->outputs[i];
         create_surface_for_output(ctx, i, output_info->width, output_info->height);
@@ -278,13 +265,10 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     return ctx;
 }
 
-// 保留旧函数名以兼容现有代码，但调用新的多屏实现
 void create_pool(struct WaylandContext* ctx, int width, int height, int channels) {
-    // 为第一个输出创建池（向后兼容）
     if (ctx->num_outputs > 0) {
         create_pool_for_output(ctx, 0, width, height, channels);
     } else {
-        // 如果没有检测到输出，创建默认输出
         ctx->num_outputs = 1;
         create_pool_for_output(ctx, 0, width, height, channels);
     }
@@ -293,9 +277,8 @@ void create_pool(struct WaylandContext* ctx, int width, int height, int channels
 void wayland_context_cleanup(struct WaylandContext* ctx) {
     if (!ctx) return;
 
-    printf("Cleaning up Wayland context...\n");
+    LOG("Cleaning up Wayland context...\n");
 
-    // 清理每个输出
     for (int i = 0; i < ctx->num_outputs; i++) {
         OutputInfo* output_info = &ctx->outputs[i];
         

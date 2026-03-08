@@ -22,7 +22,7 @@ struct Context* get_context(int width, int height);
 
 void run();
 
-void load_wallpaper(const char* path);
+int load_wallpaper(const char* path);
 
 void draw_point(int x, int y, uint32_t color);
 
