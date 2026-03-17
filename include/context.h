@@ -20,6 +20,8 @@ struct Context {
 
 struct Context* get_context(int width, int height);
 
+void app_exit();
+
 void run();
 
 int load_wallpaper(const char* path);

@@ -14,6 +14,8 @@ struct Node;
 
 static int should_exit = 0;
 static struct Context* ctx = NULL;
+static int is_update = 1;
+
 
 struct Context* get_context(int width, int height) {
     if (ctx != NULL) {
@@ -139,6 +141,9 @@ int load_wallpaper(const char* path) {
         }
     }
 
+
+    is_update = 1;
+
     stbi_image_free(img_data);
     return 0;
 }
@@ -156,7 +161,6 @@ void run() {
     }
 
 
-    int is_update = 1;
 
     while (!should_exit) {
 

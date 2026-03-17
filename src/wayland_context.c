@@ -146,6 +146,8 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
             output_info->height = ctx->height; 
             output_info->scale = 1;
             
+            LOG("id:%d, output:%p\n", output_info->id, output_info->output);
+
             wl_output_add_listener(output_info->output, &output_listener, output_info);
             
             ctx->num_outputs++;
