@@ -1,50 +1,61 @@
 #include "wayland_context.h"
 
-#include "utils.h"
 #include <endian.h>
 #include <fcntl.h>
+#include <linux/memfd.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <linux/memfd.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <wayland-client-core.h>
-#include <unistd.h>
+#include <wayland-client-protocol.h>
 #include <wayland-client.h>
 #include <wayland-util.h>
 
 #include "linux-dmabuf-v1-protocol.h"
+#include "utils.h"
+#include "viewporter-protocol.h"
+#include "wl_pointer_handle.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "xdg-shell-protocol.h"
-#include "wl_pointer_handle.h"
-#include "viewporter-protocol.h"
 
-static void output_geometry(void *data, struct wl_output *wl_output,
-                           int32_t x, int32_t y, int32_t physical_width, int32_t physical_height,
-                           int32_t subpixel, const char *make, const char *model,
-                           int32_t transform) {
-    OutputInfo *output = (OutputInfo*)data;
+void callback_done(void* data, struct wl_callback* callback,
+                   uint32_t callback_data) {
+    LOG("callback done\n");
+}
+
+static struct wl_callback_listener callback_listener = {
+    .done = callback_done,
+};
+
+static void output_geometry(void* data, struct wl_output* wl_output, int32_t x,
+                            int32_t y, int32_t physical_width,
+                            int32_t physical_height, int32_t subpixel,
+                            const char* make, const char* model,
+                            int32_t transform) {
+    OutputInfo* output = (OutputInfo*)data;
     output->x = x;
     output->y = y;
 }
 
-static void output_mode(void *data, struct wl_output *wl_output,
-                       uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
+static void output_mode(void* data, struct wl_output* wl_output, uint32_t flags,
+                        int32_t width, int32_t height, int32_t refresh) {
     if (flags & WL_OUTPUT_MODE_CURRENT) {
-        OutputInfo *output = (OutputInfo*)data;
+        OutputInfo* output = (OutputInfo*)data;
         output->width = width;
         output->height = height;
     }
 }
 
-static void output_done(void *data, struct wl_output *wl_output) {
+static void output_done(void* data, struct wl_output* wl_output) {
 }
 
-static void output_scale(void *data, struct wl_output *wl_output, int32_t scale) {
-    OutputInfo *output = (OutputInfo*)data;
+static void output_scale(void* data, struct wl_output* wl_output,
+                         int32_t scale) {
+    OutputInfo* output = (OutputInfo*)data;
     output->scale = scale;
 }
 
@@ -79,26 +90,28 @@ static struct zwlr_layer_surface_v1_listener layer_surface_listener = {
     .closed = layer_surface_closed,
 };
 
-void create_surface_for_output(struct WaylandContext* ctx, int output_idx, int32_t width, int32_t height) {
+void create_surface_for_output(struct WaylandContext* ctx, int output_idx,
+                               int32_t width, int32_t height) {
     OutputInfo* output_info = &ctx->outputs[output_idx];
-    
+
     output_info->surface = wl_compositor_create_surface(ctx->compositor);
     if (!output_info->surface) {
         return;
     }
 
     output_info->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-        ctx->layer_shell, output_info->surface, output_info->output, 
+        ctx->layer_shell, output_info->surface, output_info->output,
         ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "waypaper");
     if (!output_info->layer_surface) {
         return;
     }
 
     zwlr_layer_surface_v1_set_size(output_info->layer_surface, width, height);
-    zwlr_layer_surface_v1_set_anchor(
-        output_info->layer_surface,
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | 
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+    zwlr_layer_surface_v1_set_anchor(output_info->layer_surface,
+                                     ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
+                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
+                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
+                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
     zwlr_layer_surface_v1_set_exclusive_zone(output_info->layer_surface, -1);
 
     zwlr_layer_surface_v1_add_listener(output_info->layer_surface,
@@ -106,7 +119,6 @@ void create_surface_for_output(struct WaylandContext* ctx, int output_idx, int32
 
     wl_surface_commit(output_info->surface);
 
-    
     while (!output_info->configured) {
         wl_display_roundtrip(ctx->display);
     }
@@ -140,22 +152,33 @@ void on_global(void* data, struct wl_registry* registry, uint32_t name,
         if (ctx->num_outputs < MAX_OUTPUTS) {
             OutputInfo* output_info = &ctx->outputs[ctx->num_outputs];
             output_info->id = name;
-            output_info->output = wl_registry_bind(registry, name, &wl_output_interface, 2);
+            output_info->output =
+                wl_registry_bind(registry, name, &wl_output_interface, 2);
             output_info->configured = 0;
-            output_info->width = ctx->width;  
-            output_info->height = ctx->height; 
+            output_info->width = ctx->width;
+            output_info->height = ctx->height;
             output_info->scale = 1;
-            
+
             LOG("id:%d, output:%p\n", output_info->id, output_info->output);
 
-            wl_output_add_listener(output_info->output, &output_listener, output_info);
-            
+            wl_output_add_listener(output_info->output, &output_listener,
+                                   output_info);
+
             ctx->num_outputs++;
         }
     } else if (strcmp(wp_viewporter_interface.name, interface) == 0) {
-        ctx->viewporter = wl_registry_bind(registry, name, &wp_viewporter_interface, version);
+        ctx->viewporter =
+            wl_registry_bind(registry, name, &wp_viewporter_interface, version);
     } else if (strcmp(zwp_linux_dmabuf_v1_interface.name, interface) == 0) {
-        ctx->dmabuf = wl_registry_bind(registry, name, &zwp_linux_dmabuf_v1_interface, version);
+        ctx->dmabuf = wl_registry_bind(registry, name,
+                                       &zwp_linux_dmabuf_v1_interface, version);
+    } else if (strcmp(wl_callback_interface.name, interface) == 0) {
+        LOG("Got wl_callback\n");
+        for (int i = 0; i < ctx->num_outputs; i++) {
+            OutputInfo* output_info = &ctx->outputs[i];
+            output_info->frame_callback = wl_registry_bind(
+                registry, name, &wl_callback_interface, version);
+        }
     }
 }
 
@@ -166,10 +189,11 @@ void on_global_remove(void* data, struct wl_registry* registry, uint32_t name) {
 static struct wl_registry_listener wayland_registry_listener = {
     .global = on_global, .global_remove = on_global_remove};
 
-void create_pool_for_output(struct WaylandContext* ctx, int output_idx, int width, int height, int channels) {
+void create_pool_for_output(struct WaylandContext* ctx, int output_idx,
+                            int width, int height, int channels) {
     LOG("Creating pool for output %d: %dx%d\n", output_idx, width, height);
     OutputInfo* output_info = &ctx->outputs[output_idx];
-    
+
     char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
     int fd = syscall(SYS_memfd_create, tmp_name, MFD_CLOEXEC);
     if (fd < 0) {
@@ -178,14 +202,15 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx, int widt
     }
 
     int stride = channels * width;
-    int size = width * height * channels; 
+    int size = width * height * channels;
     if (ftruncate(fd, size) < 0) {
         ERR("Failed to truncate file for output %d", output_idx);
         close(fd);
         return;
     }
 
-    output_info->shm_data = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    output_info->shm_data =
+        mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (output_info->shm_data == MAP_FAILED) {
         ERR("Failed to mmap file for output %d", output_idx);
         close(fd);
@@ -261,13 +286,23 @@ struct WaylandContext* wayland_context_init(int width, int height) {
 
     for (int i = 0; i < ctx->num_outputs; i++) {
         OutputInfo* output_info = &ctx->outputs[i];
-        create_surface_for_output(ctx, i, output_info->width, output_info->height);
+        create_surface_for_output(ctx, i, output_info->width,
+                                  output_info->height);
+        wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
+        wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
+                                 output_info->height);
+        wl_surface_commit(output_info->surface);
+
+        output_info->frame_callback = wl_surface_frame(output_info->surface);
+        wl_callback_add_listener(output_info->frame_callback,
+                                 &callback_listener, ctx);
     }
 
     return ctx;
 }
 
-void create_pool(struct WaylandContext* ctx, int width, int height, int channels) {
+void create_pool(struct WaylandContext* ctx, int width, int height,
+                 int channels) {
     if (ctx->num_outputs > 0) {
         create_pool_for_output(ctx, 0, width, height, channels);
     } else {
@@ -283,7 +318,7 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
 
     for (int i = 0; i < ctx->num_outputs; i++) {
         OutputInfo* output_info = &ctx->outputs[i];
-        
+
         if (output_info->layer_surface) {
             zwlr_layer_surface_v1_destroy(output_info->layer_surface);
         }
@@ -301,9 +336,10 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
         }
 
         if (output_info->shm_data) {
-            munmap(output_info->shm_data, output_info->width * output_info->height * 4);
+            munmap(output_info->shm_data,
+                   output_info->width * output_info->height * 4);
         }
-        
+
         if (output_info->output) {
             wl_output_destroy(output_info->output);
         }
@@ -335,5 +371,3 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
 
     free(ctx);
 }
-
-

@@ -164,10 +164,10 @@ void run() {
 
     while (!should_exit) {
 
-        if (is_update == 0) {
-            usleep(50000);
-            continue;
+        if (wl_display_dispatch(wayland_ctx->display) == -1) {
+            break;
         }
+
 
         for (int i = 0; i < wayland_ctx->num_outputs; i++) {
             OutputInfo* output_info = &wayland_ctx->outputs[i];
@@ -184,13 +184,11 @@ void run() {
 
         wl_display_flush(wayland_ctx->display);
         
-        int ret = wl_display_dispatch_pending(wayland_ctx->display);
+       /* int ret = wl_display_dispatch_pending(wayland_ctx->display);
         if (ret == -1) {
             break;
-        }
+        }*/
         
-        is_update = 0;
-        usleep(50000);  
     }
 
     wayland_context_cleanup(wayland_ctx);

@@ -27,6 +27,7 @@ typedef struct OutputInfo {
     void* shm_data;
     struct wl_shm_pool *pool;
     struct wl_buffer *buffer;
+    struct wl_callback *frame_callback;
     int configured;
 } OutputInfo;
 
