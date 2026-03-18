@@ -32,11 +32,44 @@ static struct wl_callback_listener callback_listener = {
 };
 
 void buffer_release(void* data, struct wl_buffer* buffer) {
+    OutputInfo* output_info = (OutputInfo*)data;
+    LOG("Buffer %p released by compositor\n", buffer);
 
-    LOG("Buffer %p released, closing fd %d\n", buffer, 1);
+    // 检查是否是 current buffer（不是 old buffer）
+    if (output_info->buffer == buffer) {
+        LOG("Current buffer %p released, destroying it\n", buffer);
 
-    wl_buffer_destroy(buffer);
+        // 销毁 pool 和 shm_data
+        if (output_info->pool) {
+            wl_shm_pool_destroy(output_info->pool);
+            output_info->pool = NULL;
+        }
 
+        if (output_info->shm_data) {
+            munmap(output_info->shm_data,
+                   output_info->width * output_info->height * 4);
+            output_info->shm_data = NULL;
+        }
+
+        output_info->buffer = NULL;
+    }
+    // 检查是否是 old buffer
+    else if (output_info->old_buffer == buffer) {
+        LOG("Old buffer %p released, destroying it\n", buffer);
+
+        if (output_info->old_pool) {
+            wl_shm_pool_destroy(output_info->old_pool);
+            output_info->old_pool = NULL;
+        }
+
+        if (output_info->old_shm_data) {
+            munmap(output_info->old_shm_data,
+                   output_info->width * output_info->height * 4);
+            output_info->old_shm_data = NULL;
+        }
+
+        output_info->old_buffer = NULL;
+    }
 }
 
 static struct wl_buffer_listener buffer_listener = {
@@ -206,6 +239,19 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx,
     LOG("Creating pool for output %d: %dx%d\n", output_idx, width, height);
     OutputInfo* output_info = &ctx->outputs[output_idx];
 
+    // 将当前的 buffer 保存为 old buffer
+    output_info->old_buffer = output_info->buffer;
+    output_info->old_pool = output_info->pool;
+    output_info->old_shm_data = output_info->shm_data;
+
+    LOG("Saving current buffer %p as old buffer for output %d\n",
+        output_info->old_buffer, output_idx);
+
+    // 清空当前 buffer 的指针
+    output_info->buffer = NULL;
+    output_info->pool = NULL;
+    output_info->shm_data = NULL;
+
     char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
     int fd = syscall(SYS_memfd_create, tmp_name, MFD_CLOEXEC);
     if (fd < 0) {
@@ -249,8 +295,8 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx,
 
     wl_buffer_add_listener(output_info->buffer, &buffer_listener, output_info);
 
-
-    LOG("Pool created successfully for output %d\n", output_idx);
+    LOG("Pool created successfully for output %d, new buffer %p, old buffer %p\n",
+        output_idx, output_info->buffer, output_info->old_buffer);
 }
 
 struct WaylandContext* wayland_context_init(int width, int height) {
@@ -339,17 +385,38 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
             wl_surface_destroy(output_info->surface);
         }
 
+        // 清理 old buffer 和 pool
+        if (output_info->old_pool) {
+            wl_shm_pool_destroy(output_info->old_pool);
+            output_info->old_pool = NULL;
+        }
+
+        if (output_info->old_buffer) {
+            wl_buffer_destroy(output_info->old_buffer);
+            output_info->old_buffer = NULL;
+        }
+
+        if (output_info->old_shm_data) {
+            munmap(output_info->old_shm_data,
+                   output_info->width * output_info->height * 4);
+            output_info->old_shm_data = NULL;
+        }
+
+        // 清理当前 buffer 和 pool
         if (output_info->pool) {
             wl_shm_pool_destroy(output_info->pool);
+            output_info->pool = NULL;
         }
 
         if (output_info->buffer) {
             wl_buffer_destroy(output_info->buffer);
+            output_info->buffer = NULL;
         }
 
         if (output_info->shm_data) {
             munmap(output_info->shm_data,
                    output_info->width * output_info->height * 4);
+            output_info->shm_data = NULL;
         }
 
         if (output_info->output) {
