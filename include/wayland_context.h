@@ -29,6 +29,13 @@ typedef struct OutputInfo {
     struct wl_buffer *buffer;
     struct wl_callback *frame_callback;
     int configured;
+    
+    // Animation fields
+    void* old_image;         // Old wallpaper data
+    void* target_image;      // Target (new) image data
+    int animation_current_x; // Current animation position
+    int animation_step;      // Pixels per frame
+    int animation_active;    // Animation is active
 } OutputInfo;
 
 struct WaylandContext {
@@ -49,7 +56,7 @@ struct WaylandContext {
     int num_outputs;
     int width;  // 默认宽度
     int height; // 默认高度
-    
+    int first_load;  // 是否是第一次加载壁纸
 };
 
 struct WaylandContext *wayland_context_init(int width, int height);
@@ -61,5 +68,9 @@ void create_pool_for_output(struct WaylandContext *ctx, int output_idx, int widt
 void create_surface_for_output(struct WaylandContext *ctx, int output_idx, int32_t width, int32_t height);
 
 void recreate_callback(OutputInfo *output_info);
+
+void start_wallpaper_animation(OutputInfo *output_info);
+
+void cleanup_animation(OutputInfo *output_info);
 
 #endif

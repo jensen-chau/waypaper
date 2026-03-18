@@ -100,22 +100,65 @@ int load_wallpaper(const char* path) {
         for (int i = 0; i < wayland_ctx->num_outputs; i++) {
             OutputInfo* output_info = &wayland_ctx->outputs[i];
             
+            cleanup_animation(output_info);
+            
+            // Save old wallpaper BEFORE creating new pool
+            if (!wayland_ctx->first_load && output_info->shm_data) {
+                output_info->old_image = malloc(output_width * output_height * 4);
+                if (output_info->old_image) {
+                    memcpy(output_info->old_image, output_info->shm_data,
+                           output_width * output_height * 4);
+                    LOG("Old wallpaper saved, first pixel: 0x%X\n", 
+                        ((uint32_t*)output_info->old_image)[0]);
+                }
+            }
+            
+            // NOW create new pool (after saving old wallpaper)
             create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
 
-            if (output_info->shm_data) {
-                memcpy(output_info->shm_data, resized_data, 
-                       output_width * output_height * 4);
-                LOG("Image data copied to SHM buffer for output %d\n", i);
+            if (wayland_ctx->first_load) {
+                // First load: display directly without animation
+                if (output_info->shm_data) {
+                    memcpy(output_info->shm_data, resized_data, 
+                           output_width * output_height * 4);
+                    LOG("First load: copied image directly for output %d\n", i);
+                    
+                    // Save as old wallpaper for next transition
+                    output_info->old_image = malloc(output_width * output_height * 4);
+                    if (output_info->old_image) {
+                        memcpy(output_info->old_image, output_info->shm_data,
+                               output_width * output_height * 4);
+                    }
+                }
+                
+                wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
+                wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
+                                  output_info->height);
+                wl_surface_commit(output_info->surface);
+} else {
+                // Subsequent loads: use animation
+                // Save old wallpaper first
+                LOG("Saving old wallpaper before creating new pool\n");
+                if (output_info->shm_data) {
+                    output_info->old_image = malloc(output_width * output_height * 4);
+                    if (output_info->old_image) {
+                        memcpy(output_info->old_image, output_info->shm_data,
+                               output_width * output_height * 4);
+                        LOG("Old wallpaper saved, first pixel: 0x%X\n", 
+                            ((uint32_t*)output_info->old_image)[0]);
+                    } else {
+                        LOG("Failed to allocate memory for old_image\n");
+                    }
+                } else {
+                    LOG("shm_data is NULL, cannot save old wallpaper\n");
+                }
+                
+                // start_wallpaper_animation will handle attach and commit
+                start_wallpaper_animation(output_info);
             }
-
-            recreate_callback(output_info);
-
-            wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
-            wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
-                              output_info->height);
-            wl_surface_commit(output_info->surface);
         }
 
+        wayland_ctx->first_load = 0;
         free(resized_data);
     } else {
         for (int i = 0; i < wayland_ctx->num_outputs; i++) {
@@ -141,24 +184,63 @@ int load_wallpaper(const char* path) {
                 resized_data[j * 4 + 2] = r; 
             }
 
-            create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
+            cleanup_animation(output_info);
 
-            if (output_info->shm_data) {
-                memcpy(output_info->shm_data, resized_data, 
-                       output_width * output_height * 4);
-                LOG("Resized image data copied to SHM buffer for output %d\n", i);
+            if (wayland_ctx->first_load) {
+                // First load: create pool and display directly
+                create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
+                
+                if (output_info->shm_data) {
+                    memcpy(output_info->shm_data, resized_data, 
+                           output_width * output_height * 4);
+                    LOG("First load: copied image directly for output %d\n", i);
+                    
+                    // Save as old wallpaper for next transition
+                    output_info->old_image = malloc(output_width * output_height * 4);
+                    if (output_info->old_image) {
+                        memcpy(output_info->old_image, output_info->shm_data,
+                               output_width * output_height * 4);
+                    }
+                }
+                
+                wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
+                wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
+                                  output_info->height);
+                wl_surface_commit(output_info->surface);
+                
+                free(resized_data);
+            } else {
+                // Subsequent loads: use animation
+                // Save old wallpaper first BEFORE creating new pool
+                LOG("Saving old wallpaper before creating new pool (multi-output path)\n");
+                if (output_info->shm_data) {
+                    output_info->old_image = malloc(output_width * output_height * 4);
+                    if (output_info->old_image) {
+                        memcpy(output_info->old_image, output_info->shm_data,
+                               output_width * output_height * 4);
+                        LOG("Old wallpaper saved, first pixel: 0x%X\n", 
+                            ((uint32_t*)output_info->old_image)[0]);
+                    } else {
+                        LOG("Failed to allocate memory for old_image\n");
+                    }
+                } else {
+                    LOG("shm_data is NULL, cannot save old wallpaper\n");
+                }
+                
+                // NOW create new pool (after saving old wallpaper)
+                create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
+                
+                // Save new image data for animation
+                output_info->target_image = resized_data;
+                
+                // start_wallpaper_animation will handle attach and commit
+                start_wallpaper_animation(output_info);
+                
+                // Note: resized_data is now owned by output_info->target_image
             }
-
-
-            recreate_callback(output_info);
-
-            wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
-            wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
-                              output_info->height);
-            wl_surface_commit(output_info->surface);
-
-            free(resized_data);
         }
+        
+        wayland_ctx->first_load = 0;
     }
 
 
@@ -167,10 +249,10 @@ int load_wallpaper(const char* path) {
     pthread_mutex_unlock(&display_mutex);
     stbi_image_free(img_data);
     
-    // Flush pending events to compositor
+    // Just flush, don't dispatch pending events here
+    // Let the event loop handle frame callbacks
     pthread_mutex_lock(&display_mutex);
     wl_display_flush(wayland_ctx->display);
-    wl_display_dispatch_pending(wayland_ctx->display);
     pthread_mutex_unlock(&display_mutex);
     
     return 0;

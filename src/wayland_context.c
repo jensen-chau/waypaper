@@ -27,9 +27,83 @@ void callback_done(void* data, struct wl_callback* callback,
     LOG("callback done\n");
 }
 
+static void animation_frame_done(void* data, struct wl_callback* callback,
+                                 uint32_t callback_data);
+
 static struct wl_callback_listener callback_listener = {
     .done = callback_done,
 };
+
+static struct wl_callback_listener animation_callback_listener = {
+    .done = animation_frame_done,
+};
+
+void animation_frame_done(void* data, struct wl_callback* callback,
+                                 uint32_t callback_data) {
+    OutputInfo* output_info = (OutputInfo*)data;
+    
+    LOG("animation_frame_done called, active=%d, current_x=%d\n", 
+        output_info ? output_info->animation_active : -1,
+        output_info ? output_info->animation_current_x : -1);
+    
+    if (!output_info || !output_info->animation_active) {
+        return;
+    }
+    
+    int next_x = output_info->animation_current_x + output_info->animation_step;
+    int width = output_info->width;
+    int height = output_info->height;
+    
+    LOG("Next frame: current_x=%d, next_x=%d, width=%d\n", 
+        output_info->animation_current_x, next_x, width);
+    
+    if (next_x <= width) {
+        int start_x = output_info->animation_current_x;
+        int strip_width = next_x - start_x;
+        
+        // Compose frame: left part is new wallpaper, right part is old wallpaper
+        uint32_t* new_src = (uint32_t*)output_info->target_image;
+        uint32_t* dst = (uint32_t*)output_info->shm_data;
+        
+        for (int y = 0; y < height; y++) {
+            int row_offset = y * width;
+            // Copy new wallpaper for the new strip
+            for (int x = start_x; x < next_x; x++) {
+                dst[row_offset + x] = new_src[row_offset + x];
+            }
+        }
+        
+        // Damage the updated strip
+        wl_surface_damage_buffer(output_info->surface, start_x, 0, strip_width, height);
+        
+        // Attach buffer again (Wayland requires re-attach after modifications)
+        wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
+        
+        // Request next frame BEFORE committing
+        struct wl_callback* new_callback = wl_surface_frame(output_info->surface);
+        wl_callback_add_listener(new_callback, &animation_callback_listener, output_info);
+        output_info->frame_callback = new_callback;
+        
+        // Commit to trigger the frame
+        wl_surface_commit(output_info->surface);
+        
+        output_info->animation_current_x = next_x;
+        wl_callback_destroy(callback);
+    } else {
+        // Animation complete
+        output_info->animation_active = 0;
+        wl_callback_destroy(callback);
+        
+        // Free old wallpaper data since we no longer need it
+        if (output_info->old_image) {
+            free(output_info->old_image);
+            output_info->old_image = NULL;
+            LOG("Animation complete: freed old wallpaper data\n");
+        }
+        
+        LOG("Animation complete\n");
+    }
+}
 
 static void output_geometry(void* data, struct wl_output* wl_output, int32_t x,
                             int32_t y, int32_t physical_width,
@@ -289,6 +363,7 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     ctx->height = height;
     ctx->registry = registry;
     ctx->num_outputs = 0;
+    ctx->first_load = 1;  // Initialize first load flag
 
     wl_registry_add_listener(registry, &wayland_registry_listener, ctx);
 
@@ -361,6 +436,8 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
         if (output_info->output) {
             wl_output_destroy(output_info->output);
         }
+        
+        cleanup_animation(output_info);
     }
 
     if (ctx->compositor) {
@@ -397,4 +474,84 @@ void recreate_callback(OutputInfo* output_info) {
 
     output_info->frame_callback = wl_surface_frame(output_info->surface);
     wl_callback_add_listener(output_info->frame_callback, &callback_listener, NULL);
+}
+
+void start_wallpaper_animation(OutputInfo* output_info) {
+    if (!output_info || !output_info->target_image) {
+        return;
+    }
+    
+    output_info->animation_current_x = 0;
+    output_info->animation_step = 20;  // 20 pixels per frame
+    output_info->animation_active = 1;
+    
+    int width = output_info->width;
+    int height = output_info->height;
+    int first_width = output_info->animation_step;
+    if (first_width > width) first_width = width;
+    
+    LOG("Animation started: old_image=%p, target_image=%p, shm_data=%p\n", 
+        output_info->old_image, output_info->target_image, output_info->shm_data);
+    
+    // Copy old wallpaper to buffer first
+    if (output_info->old_image && output_info->shm_data) {
+        memcpy(output_info->shm_data, output_info->old_image, width * height * 4);
+        LOG("Copied old wallpaper to buffer, first pixel: 0x%X\n", 
+            ((uint32_t*)output_info->shm_data)[0]);
+    } else {
+        LOG("WARNING: old_image or shm_data is NULL\n");
+        if (!output_info->old_image) LOG("  old_image is NULL\n");
+        if (!output_info->shm_data) LOG("  shm_data is NULL\n");
+        // Clear buffer to black if no old wallpaper
+        if (output_info->shm_data) {
+            memset(output_info->shm_data, 0, width * height * 4);
+        }
+    }
+    
+    // Copy first strip of new wallpaper
+    if (output_info->shm_data && output_info->target_image) {
+        uint32_t* src = (uint32_t*)output_info->target_image;
+        uint32_t* dst = (uint32_t*)output_info->shm_data;
+        for (int y = 0; y < height; y++) {
+            int row_offset = y * width;
+            for (int x = 0; x < first_width; x++) {
+                dst[row_offset + x] = src[row_offset + x];
+            }
+        }
+    }
+    
+    // Damage the entire surface
+    wl_surface_damage_buffer(output_info->surface, 0, 0, width, height);
+    
+    // Attach buffer
+    wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
+    
+    // Request next frame BEFORE committing
+    output_info->frame_callback = wl_surface_frame(output_info->surface);
+    wl_callback_add_listener(output_info->frame_callback, &animation_callback_listener, output_info);
+    
+    // Commit to trigger the frame
+    wl_surface_commit(output_info->surface);
+    
+    output_info->animation_current_x = first_width;
+    
+    LOG("Animation started\n");
+}
+
+void cleanup_animation(OutputInfo* output_info) {
+    if (!output_info) {
+        return;
+    }
+    
+    if (output_info->old_image) {
+        free(output_info->old_image);
+        output_info->old_image = NULL;
+    }
+    
+    if (output_info->target_image) {
+        free(output_info->target_image);
+        output_info->target_image = NULL;
+    }
+    
+    output_info->animation_active = 0;
 }
