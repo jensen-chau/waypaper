@@ -1,13 +1,15 @@
+#include <wayland-client-protocol.h>
 #define STB_IMAGE_IMPLEMENTATION
-#include "context.h"
-
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
-#include "utils.h"
-#include "stb_image.h"
+#include "context.h"
 #include "scale.h"
+#include "stb_image.h"
+#include "utils.h"
 #include "wayland_context.h"
 
 struct Node;
@@ -15,7 +17,6 @@ struct Node;
 static int should_exit = 0;
 static struct Context* ctx = NULL;
 static int is_update = 1;
-
 
 struct Context* get_context(int width, int height) {
     if (ctx != NULL) {
@@ -50,35 +51,35 @@ int load_wallpaper(const char* path) {
         ERR("Failed to load image: %s\n", stbi_failure_reason());
         return -1;
     }
-    LOG("Image loaded: %dx%d, channels:%d\n", width, height,
-           channels_in_file);
+    LOG("Image loaded: %dx%d, channels:%d\n", width, height, channels_in_file);
 
     struct WaylandContext* wayland_ctx = ctx->wayland_context;
-    
+
     int all_outputs_same = 1;
     if (wayland_ctx->num_outputs > 1) {
         int first_width = wayland_ctx->outputs[0].width;
         int first_height = wayland_ctx->outputs[0].height;
         for (int i = 1; i < wayland_ctx->num_outputs; i++) {
-            if (wayland_ctx->outputs[i].width != first_width || 
+            if (wayland_ctx->outputs[i].width != first_width ||
                 wayland_ctx->outputs[i].height != first_height) {
                 all_outputs_same = 0;
                 break;
             }
         }
     }
-    
+
     if (all_outputs_same && wayland_ctx->num_outputs > 1) {
         OutputInfo* first_output = &wayland_ctx->outputs[0];
         int output_width = first_output->width;
         int output_height = first_output->height;
-        
-        LOG("All outputs have same resolution: %dx%d, optimizing...\n", output_width, output_height);
-        
+
+        LOG("All outputs have same resolution: %dx%d, optimizing...\n",
+            output_width, output_height);
+
         int output_size;
-        unsigned char* resized_data = scale_image(img_data, width, height, 
-                                                 output_width, output_height, 
-                                                 SCALE_MODE_FILL, &output_size);
+        unsigned char* resized_data =
+            scale_image(img_data, width, height, output_width, output_height,
+                        SCALE_MODE_FILL, &output_size);
         if (!resized_data) {
             ERR("Failed to scale image\n");
             stbi_image_free(img_data);
@@ -88,18 +89,31 @@ int load_wallpaper(const char* path) {
         for (int j = 0; j < output_width * output_height; j++) {
             unsigned char r = resized_data[j * 4 + 0];
             unsigned char b = resized_data[j * 4 + 2];
-            resized_data[j * 4 + 0] = b; 
-            resized_data[j * 4 + 2] = r; 
+            resized_data[j * 4 + 0] = b;
+            resized_data[j * 4 + 2] = r;
         }
 
         for (int i = 0; i < wayland_ctx->num_outputs; i++) {
             OutputInfo* output_info = &wayland_ctx->outputs[i];
-            
-            create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
+
+            create_pool_for_output(wayland_ctx, i, output_width, output_height,
+                                   4);
 
             if (output_info->shm_data) {
-                memcpy(output_info->shm_data, resized_data, 
+                memcpy(output_info->shm_data, resized_data,
                        output_width * output_height * 4);
+
+                int size = output_width * output_height * 4;
+                if (msync(output_info->shm_data, size, MS_SYNC) != 0) {
+                    ERR("msync failed: %s", strerror(1));
+                }
+
+                wl_surface_attach(output_info->surface, output_info->buffer, 0,
+                                  0);
+                wl_surface_damage_buffer(output_info->surface, 0, 0,
+                                         output_info->width,
+                                         output_info->height);
+                wl_surface_commit(output_info->surface);
                 LOG("Image data copied to SHM buffer for output %d\n", i);
             }
         }
@@ -110,13 +124,14 @@ int load_wallpaper(const char* path) {
             OutputInfo* output_info = &wayland_ctx->outputs[i];
             int output_width = output_info->width;
             int output_height = output_info->height;
-            
-            LOG("Processing output %d: %dx%d\n", i, output_width, output_height);
-            
+
+            LOG("Processing output %d: %dx%d\n", i, output_width,
+                output_height);
+
             int output_size;
-            unsigned char* resized_data = scale_image(img_data, width, height, 
-                                                     output_width, output_height, 
-                                                     SCALE_MODE_FILL, &output_size);
+            unsigned char* resized_data =
+                scale_image(img_data, width, height, output_width,
+                            output_height, SCALE_MODE_FILL, &output_size);
             if (!resized_data) {
                 ERR("Failed to scale image for output %d\n", i);
                 continue;
@@ -125,22 +140,33 @@ int load_wallpaper(const char* path) {
             for (int j = 0; j < output_width * output_height; j++) {
                 unsigned char r = resized_data[j * 4 + 0];
                 unsigned char b = resized_data[j * 4 + 2];
-                resized_data[j * 4 + 0] = b;  
-                resized_data[j * 4 + 2] = r; 
+                resized_data[j * 4 + 0] = b;
+                resized_data[j * 4 + 2] = r;
             }
 
-            create_pool_for_output(wayland_ctx, i, output_width, output_height, 4);
+            create_pool_for_output(wayland_ctx, i, output_width, output_height,
+                                   4);
 
             if (output_info->shm_data) {
-                memcpy(output_info->shm_data, resized_data, 
+                memcpy(output_info->shm_data, resized_data,
                        output_width * output_height * 4);
-                LOG("Resized image data copied to SHM buffer for output %d\n", i);
+                int size = output_width * output_height * 4;
+                if (msync(output_info->shm_data, size, MS_SYNC) != 0) {
+                    ERR("msync failed: %s", strerror(1));
+                }
+                wl_surface_attach(output_info->surface, output_info->buffer, 0,
+                                  0);
+                wl_surface_damage_buffer(output_info->surface, 0, 0,
+                                         output_info->width,
+                                         output_info->height);
+                wl_surface_commit(output_info->surface);
+                LOG("Resized image data copied to SHM buffer for output %d\n",
+                    i);
             }
 
             free(resized_data);
         }
     }
-
 
     is_update = 1;
 
@@ -160,35 +186,12 @@ void run() {
         return;
     }
 
-
-
     while (!should_exit) {
-
         if (wl_display_dispatch(wayland_ctx->display) == -1) {
             break;
         }
 
-
-        for (int i = 0; i < wayland_ctx->num_outputs; i++) {
-            OutputInfo* output_info = &wayland_ctx->outputs[i];
-            
-            if (!output_info->buffer) {
-                continue;
-            }
-
-            wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
-            wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
-                              output_info->height);
-            wl_surface_commit(output_info->surface);
-        }
-
-        wl_display_flush(wayland_ctx->display);
-        
-       /* int ret = wl_display_dispatch_pending(wayland_ctx->display);
-        if (ret == -1) {
-            break;
-        }*/
-        
+        LOG("wayland event processed\n");
     }
 
     wayland_context_cleanup(wayland_ctx);

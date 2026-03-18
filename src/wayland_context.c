@@ -31,6 +31,18 @@ static struct wl_callback_listener callback_listener = {
     .done = callback_done,
 };
 
+void buffer_release(void* data, struct wl_buffer* buffer) {
+
+    LOG("Buffer %p released, closing fd %d\n", buffer, 1);
+
+    wl_buffer_destroy(buffer);
+
+}
+
+static struct wl_buffer_listener buffer_listener = {
+    .release = buffer_release,
+};
+
 static void output_geometry(void* data, struct wl_output* wl_output, int32_t x,
                             int32_t y, int32_t physical_width,
                             int32_t physical_height, int32_t subpixel,
@@ -235,6 +247,9 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx,
         return;
     }
 
+    wl_buffer_add_listener(output_info->buffer, &buffer_listener, output_info);
+
+
     LOG("Pool created successfully for output %d\n", output_idx);
 }
 
@@ -266,9 +281,6 @@ struct WaylandContext* wayland_context_init(int width, int height) {
     ctx->num_outputs = 0;
 
     wl_registry_add_listener(registry, &wayland_registry_listener, ctx);
-
-    wl_display_roundtrip(display);
-    wl_display_roundtrip(display);
 
     wl_display_roundtrip(display);
 
