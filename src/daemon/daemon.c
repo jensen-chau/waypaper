@@ -76,14 +76,10 @@ void handle_message(char* message, char* response, size_t response_size) {
         running = 0;
         app_exit();
 
-        // 等待渲染线程结束
-        if (render_thread != 0) {
-            pthread_join(render_thread, NULL);
-            render_thread = 0;
-            printf("Render thread stopped\n");
-        }
-
         strncpy(response, "Shutting down", response_size - 1);
+
+        // 直接退出，不等待线程
+        exit(0);
 
     } else if (strcmp(cmd, CMD_HELP) == 0) {
         strncpy(response, "help", response_size - 1);

@@ -1,7 +1,6 @@
 #include <wayland-client-protocol.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <fcntl.h>
-#include <poll.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -208,27 +207,12 @@ void run() {
         return;
     }
 
-    struct pollfd fds[1];
-    fds[0].fd = wl_display_get_fd(wayland_ctx->display);
-    fds[0].events = POLLIN;
-
     while (!should_exit) {
-        // 先 flush 任何挂起的请求
-        wl_display_flush(wayland_ctx->display);
-
-        // 使用 poll 等待事件，设置 100ms 超时
-        int ret = poll(fds, 1, 100);
-        if (ret == -1) {
+        if (wl_display_dispatch(wayland_ctx->display) == -1) {
             break;
         }
 
-        // 如果有事件可读，处理它们
-        if (ret > 0 && (fds[0].revents & POLLIN)) {
-            if (wl_display_dispatch(wayland_ctx->display) == -1) {
-                break;
-            }
-            LOG("wayland event processed\n");
-        }
+        LOG("wayland event processed\n");
     }
 
     wayland_context_cleanup(wayland_ctx);
