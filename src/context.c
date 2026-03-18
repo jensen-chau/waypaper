@@ -1,9 +1,12 @@
+#include <wayland-client-protocol.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "context.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <poll.h>
+#include <pthread.h>
 
 #include "utils.h"
 #include "stb_image.h"
@@ -15,6 +18,7 @@ struct Node;
 static int should_exit = 0;
 static struct Context* ctx = NULL;
 static int is_update = 1;
+static pthread_mutex_t display_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 struct Context* get_context(int width, int height) {
@@ -53,6 +57,7 @@ int load_wallpaper(const char* path) {
     LOG("Image loaded: %dx%d, channels:%d\n", width, height,
            channels_in_file);
 
+    pthread_mutex_lock(&display_mutex);
     struct WaylandContext* wayland_ctx = ctx->wayland_context;
     
     int all_outputs_same = 1;
@@ -102,6 +107,13 @@ int load_wallpaper(const char* path) {
                        output_width * output_height * 4);
                 LOG("Image data copied to SHM buffer for output %d\n", i);
             }
+
+            recreate_callback(output_info);
+
+            wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
+            wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
+                              output_info->height);
+            wl_surface_commit(output_info->surface);
         }
 
         free(resized_data);
@@ -137,6 +149,14 @@ int load_wallpaper(const char* path) {
                 LOG("Resized image data copied to SHM buffer for output %d\n", i);
             }
 
+
+            recreate_callback(output_info);
+
+            wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
+            wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
+                              output_info->height);
+            wl_surface_commit(output_info->surface);
+
             free(resized_data);
         }
     }
@@ -144,7 +164,15 @@ int load_wallpaper(const char* path) {
 
     is_update = 1;
 
+    pthread_mutex_unlock(&display_mutex);
     stbi_image_free(img_data);
+    
+    // Flush pending events to compositor
+    pthread_mutex_lock(&display_mutex);
+    wl_display_flush(wayland_ctx->display);
+    wl_display_dispatch_pending(wayland_ctx->display);
+    pthread_mutex_unlock(&display_mutex);
+    
     return 0;
 }
 
@@ -160,36 +188,52 @@ void run() {
         return;
     }
 
-
+    // Use a poll-based approach to avoid blocking forever
+    struct pollfd pollfds[1];
+    pollfds[0].fd = wl_display_get_fd(wayland_ctx->display);
+    pollfds[0].events = POLLIN;
 
     while (!should_exit) {
-
-        if (wl_display_dispatch(wayland_ctx->display) == -1) {
-            break;
-        }
-
-
-        for (int i = 0; i < wayland_ctx->num_outputs; i++) {
-            OutputInfo* output_info = &wayland_ctx->outputs[i];
-            
-            if (!output_info->buffer) {
-                continue;
-            }
-
-            wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
-            wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
-                              output_info->height);
-            wl_surface_commit(output_info->surface);
+        pthread_mutex_lock(&display_mutex);
+        
+        // First, flush any pending requests to the compositor
+        while (wl_display_prepare_read(wayland_ctx->display) != 0) {
+            wl_display_dispatch_pending(wayland_ctx->display);
         }
 
         wl_display_flush(wayland_ctx->display);
+        pthread_mutex_unlock(&display_mutex);
+
+        // Wait for events with a timeout (100ms) to allow checking should_exit
+        int ret = poll(pollfds, 1, 100);
         
-       /* int ret = wl_display_dispatch_pending(wayland_ctx->display);
-        if (ret == -1) {
+        pthread_mutex_lock(&display_mutex);
+        if (ret < 0) {
+            wl_display_cancel_read(wayland_ctx->display);
+            pthread_mutex_unlock(&display_mutex);
             break;
-        }*/
-        
+        } else if (ret == 0) {
+            // Timeout, just cancel and continue to check should_exit
+            wl_display_cancel_read(wayland_ctx->display);
+            pthread_mutex_unlock(&display_mutex);
+            continue;
+        } else {
+            // Read and dispatch events
+            if (pollfds[0].revents & POLLIN) {
+                wl_display_read_events(wayland_ctx->display);
+                wl_display_dispatch_pending(wayland_ctx->display);
+            } else {
+                wl_display_cancel_read(wayland_ctx->display);
+            }
+            pthread_mutex_unlock(&display_mutex);
+        }
     }
+
+    // Final cleanup dispatch
+    pthread_mutex_lock(&display_mutex);
+    wl_display_flush(wayland_ctx->display);
+    wl_display_dispatch_pending(wayland_ctx->display);
+    pthread_mutex_unlock(&display_mutex);
 
     wayland_context_cleanup(wayland_ctx);
     free(ctx);

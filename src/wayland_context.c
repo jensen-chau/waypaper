@@ -94,33 +94,43 @@ void create_surface_for_output(struct WaylandContext* ctx, int output_idx,
                                int32_t width, int32_t height) {
     OutputInfo* output_info = &ctx->outputs[output_idx];
 
-    output_info->surface = wl_compositor_create_surface(ctx->compositor);
+    // Check if surface already exists
     if (!output_info->surface) {
-        return;
+        output_info->surface = wl_compositor_create_surface(ctx->compositor);
+        if (!output_info->surface) {
+            return;
+        }
     }
 
-    output_info->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-        ctx->layer_shell, output_info->surface, output_info->output,
-        ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "waypaper");
+    // Check if layer_surface already exists
     if (!output_info->layer_surface) {
-        return;
-    }
+        output_info->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+            ctx->layer_shell, output_info->surface, output_info->output,
+            ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "waypaper");
+        if (!output_info->layer_surface) {
+            return;
+        }
 
-    zwlr_layer_surface_v1_set_size(output_info->layer_surface, width, height);
-    zwlr_layer_surface_v1_set_anchor(output_info->layer_surface,
-                                     ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
-                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
-                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
-                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
-    zwlr_layer_surface_v1_set_exclusive_zone(output_info->layer_surface, -1);
+        zwlr_layer_surface_v1_set_size(output_info->layer_surface, width, height);
+        zwlr_layer_surface_v1_set_anchor(output_info->layer_surface,
+                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
+                                             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
+                                             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
+                                             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+        zwlr_layer_surface_v1_set_exclusive_zone(output_info->layer_surface, -1);
 
-    zwlr_layer_surface_v1_add_listener(output_info->layer_surface,
-                                       &layer_surface_listener, output_info);
+        zwlr_layer_surface_v1_add_listener(output_info->layer_surface,
+                                           &layer_surface_listener, output_info);
 
-    wl_surface_commit(output_info->surface);
+        output_info->configured = 0;
+        wl_surface_commit(output_info->surface);
 
-    while (!output_info->configured) {
-        wl_display_roundtrip(ctx->display);
+        while (!output_info->configured) {
+            wl_display_roundtrip(ctx->display);
+        }
+    } else {
+        // If layer_surface exists, just update the size
+        zwlr_layer_surface_v1_set_size(output_info->layer_surface, width, height);
     }
 }
 
@@ -193,6 +203,21 @@ void create_pool_for_output(struct WaylandContext* ctx, int output_idx,
                             int width, int height, int channels) {
     LOG("Creating pool for output %d: %dx%d\n", output_idx, width, height);
     OutputInfo* output_info = &ctx->outputs[output_idx];
+
+    // Clean up old resources first
+    if (output_info->buffer) {
+        wl_buffer_destroy(output_info->buffer);
+        output_info->buffer = NULL;
+    }
+    if (output_info->pool) {
+        wl_shm_pool_destroy(output_info->pool);
+        output_info->pool = NULL;
+    }
+    if (output_info->shm_data) {
+        munmap(output_info->shm_data,
+               output_info->width * output_info->height * channels);
+        output_info->shm_data = NULL;
+    }
 
     char tmp_name[] = "/tmp/wayland-shm-XXXXXX";
     int fd = syscall(SYS_memfd_create, tmp_name, MFD_CLOEXEC);
@@ -288,14 +313,7 @@ struct WaylandContext* wayland_context_init(int width, int height) {
         OutputInfo* output_info = &ctx->outputs[i];
         create_surface_for_output(ctx, i, output_info->width,
                                   output_info->height);
-        wl_surface_attach(output_info->surface, output_info->buffer, 0, 0);
-        wl_surface_damage_buffer(output_info->surface, 0, 0, output_info->width,
-                                 output_info->height);
-        wl_surface_commit(output_info->surface);
-
-        output_info->frame_callback = wl_surface_frame(output_info->surface);
-        wl_callback_add_listener(output_info->frame_callback,
-                                 &callback_listener, ctx);
+        // Don't attach buffer here, it will be created in load_wallpaper
     }
 
     return ctx;
@@ -370,4 +388,13 @@ void wayland_context_cleanup(struct WaylandContext* ctx) {
     }
 
     free(ctx);
+}
+
+void recreate_callback(OutputInfo* output_info) {
+    if (output_info->frame_callback) {
+        wl_callback_destroy(output_info->frame_callback);
+    }
+
+    output_info->frame_callback = wl_surface_frame(output_info->surface);
+    wl_callback_add_listener(output_info->frame_callback, &callback_listener, NULL);
 }

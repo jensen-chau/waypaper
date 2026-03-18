@@ -60,4 +60,6 @@ void create_pool_for_output(struct WaylandContext *ctx, int output_idx, int widt
 
 void create_surface_for_output(struct WaylandContext *ctx, int output_idx, int32_t width, int32_t height);
 
+void recreate_callback(OutputInfo *output_info);
+
 #endif
