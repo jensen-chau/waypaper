@@ -24,7 +24,7 @@
 
 void callback_done(void* data, struct wl_callback* callback,
                    uint32_t callback_data) {
-    LOG("callback done\n");
+    // Frame callback 频繁调用，移除日志以降低 CPU 占用
 }
 
 static struct wl_callback_listener callback_listener = {

@@ -211,8 +211,6 @@ void run() {
         if (wl_display_dispatch(wayland_ctx->display) == -1) {
             break;
         }
-
-        LOG("wayland event processed\n");
     }
 
     wayland_context_cleanup(wayland_ctx);
